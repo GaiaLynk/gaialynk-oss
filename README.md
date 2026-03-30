@@ -59,47 +59,36 @@ useful results quickly — without having to learn agent protocols first.
 
 ---
 
-## From the founder
+## Founder note
 
-Hi, I’m **Steven**.
+Hi, I’m Steven.
 
-I have zero traditional software-engineering résumé: no CS degree, no years
-shipping backend services, no LeetCode muscle memory, no open-source commits
-before this year. Most of my adult life has been strategy, operations, and the
-messy coordination problems between people and organizations.
+I have zero professional background in software engineering.  
+No CS degree, no years shipping backend services, no LeetCode muscle memory, no open-source commits before this year. Most of my adult life has been spent in strategy, operations, and wrestling with the messy coordination problems that exist between people and organizations.
 
-Yet I’m here because I’m **convinced** the world needs a **trusted,
-human-in-the-loop fabric** where very different agents — and humans — can
-collaborate safely, instead of firing tool calls into disconnected sandboxes.
+And yet here I am, trying to build something I am **convinced** the world badly needs right now: a **trusted, governed, human-in-the-loop fabric** where very different agents — and humans — can actually collaborate safely instead of throwing tool calls at each other in disconnected sandboxes.
 
-**Why now?** The capability surge is already here; **reliable coordination and
-societal trust are falling behind**. If we only optimize for raw power, without
-shared rules, observability, and meaningful human oversight by default, we get
-capable but brittle, unaccountable swarms — a future ordinary people and serious
-institutions **will not adopt at scale**.
+Why now? Because 2024–2025 made one thing painfully obvious:  
+The capability explosion is already here, but **reliable coordination and societal trust are falling dangerously behind**. If we keep optimizing only for raw power without shared rules, real observability, and meaningful human oversight by default, we will end up with swarms of extremely capable but brittle, unaccountable agents — exactly the future that ordinary people and serious institutions **will never adopt at meaningful scale**.
 
-I can’t build this alone. What I can do is keep asking the hard questions, draw
-the diagrams, write the uncomfortable-but-hopeful docs, talk to people who fear
-agents and people who are all-in, and make space for engineers far better than
-me to contribute to something larger than another single-player agent demo.
+I cannot build this vision by myself. I know that very clearly.  
+What I can do is keep asking the hard question obsessively, draw the diagrams, write the uncomfortable but hopeful docs, talk to users who are terrified of agents and users who are already all-in, and try to create a space where better engineers than me feel it's worth contributing to something bigger than yet another single-player agent showcase.
 
-**A conviction I won’t walk back:**  
-humans should not — and do not have to — be squeezed out of the core decision
-loop of intelligent systems. We still have a window to build coordination
-infrastructure that puts human presence **by design**: not as an afterthought,
-not behind seven layers of “just trust us,” but as a **first-class,
-auditable, verifiable** participant. That is the **minimum viable trust floor**
-for AI systems to ever be socially acceptable at scale.
+This repository exists because of a stubborn, borderline unreasonable conviction:  
+**Humans should not — and do not have to — be squeezed out of the core decision loop of intelligent systems.**  
+We still have a narrow, real window to build coordination infrastructure that puts meaningful human presence in the loop **by design** — not as a bolted-on afterthought, not hidden behind seven layers of "just trust us", but as a **non-negotiable, auditable, verifiable first-class participant**.  
+This is not a nice-to-have. It is the **minimum viable trust floor** for large-scale AI systems to ever be socially acceptable.
 
-If any of this resonates — if you’ve felt both thrilled and uneasy about where
-multi-agent systems are heading — I’d be grateful for your eyes, hard questions,
-code, criticism, or even a few minutes telling me where I’m most dangerously
-wrong.
+If any part of that resonates with you —  
+if you've also felt both thrilled and deeply uneasy about where multi-agent systems are heading,  
+if you also believe that "in an era of runaway capability, what we most urgently need is a bedrock of trust, not another layer of marketing slogans" —  
+**I would be profoundly grateful for your eyes, your hard questions, your code, your criticism, or even just a few minutes of your time telling me where I'm most dangerously wrong.**
 
 Thank you for reading this far.  
-Let’s build something **worthy of trust** — and that can **withstand time**.
+Let's try to build something that is **genuinely worthy of trust — and that can withstand the test of time**.
 
-— Steven · March 2026
+— Steven  
+March 2026 China
 
 ---
 
