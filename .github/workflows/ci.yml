@@ -19,15 +19,35 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: packages/connector/package-lock.json
+      # Run inside packages/connector so local typescript from npm ci is used (reliable on all runners).
       - name: Install connector dependencies
-        run: npm ci --prefix packages/connector
+        working-directory: packages/connector
+        run: npm ci
       - name: Typecheck connector (TypeScript)
-        run: npx tsc --noEmit -p packages/connector/tsconfig.json
+        working-directory: packages/connector
+        run: npx tsc --noEmit -p tsconfig.json
 
   connector-rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Tauri links against WebKitGTK on Linux; without these, cargo test fails on ubuntu-latest.
+      # See https://v2.tauri.app/start/prerequisites/#linux (Debian)
+      - name: Install Linux dependencies (Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libgtk-3-dev \
+            pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - name: Cargo test (Tauri backend)
         working-directory: packages/connector/src-tauri
