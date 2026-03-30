@@ -1,0 +1,14 @@
+GaiaLynk — Licensing Notice
+
+Copyright (c) 2026 Steven Zhang
+
+This repository is a private development monorepo. Not all paths use the same
+license. The MIT license in the LICENSE file applies only to the open-source
+surface documented in docs/LICENSING.md and enumerated in
+config/public-oss-manifest.json (see docs/PUBLIC-MANIFEST.md).
+
+Proprietary components (including packages/server, packages/website, and
+packages/console unless otherwise stated) are not licensed under those MIT
+terms. See the LICENSE file inside each proprietary package directory.
+
+For commercial licensing inquiries, contact the copyright holder.

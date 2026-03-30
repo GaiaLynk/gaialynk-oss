@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "description": "Paths copied into the public OSS mirror by scripts/sync-public-oss-mirror.mjs. Keep in sync with docs/PUBLIC-MANIFEST.md.",
+  "include": [
+    { "src": "config/public-oss-manifest.json", "dest": "config/public-oss-manifest.json" },
+    { "src": "packages/connector", "dest": "packages/connector" },
+    { "src": "packages/shared", "dest": "packages/shared" },
+    { "src": "docs/Agent-IM-Vision.md", "dest": "docs/Agent-IM-Vision.md" },
+    { "src": "docs/Agent-IM-Public-Roadmap-Vision.md", "dest": "docs/Agent-IM-Public-Roadmap-Vision.md" },
+    { "src": "docs/Agent-IM-Reading-Path.md", "dest": "docs/Agent-IM-Reading-Path.md" },
+    { "src": "docs/Desktop-Connector-Threat-Model-v1.md", "dest": "docs/Desktop-Connector-Threat-Model-v1.md" },
+    { "src": "docs/Connector-Release-Guide-v1.md", "dest": "docs/Connector-Release-Guide-v1.md" },
+    { "src": "docs/contracts/README.md", "dest": "docs/contracts/README.md" },
+    { "src": "docs/contracts/mainline-api-contract-baseline.v1.json", "dest": "docs/contracts/mainline-api-contract-baseline.v1.json" }
+  ],
+  "rootFiles": [
+    { "src": "LICENSE", "dest": "LICENSE" },
+    { "src": "NOTICE", "dest": "NOTICE" },
+    { "src": "docs/LICENSING.md", "dest": "docs/LICENSING.md" },
+    { "src": "docs/PUBLIC-MANIFEST.md", "dest": "docs/PUBLIC-MANIFEST.md" },
+    { "src": "docs/oss-mirror/README.md", "dest": "README.md" },
+    { "src": "docs/oss-mirror/CONTRIBUTING.md", "dest": "CONTRIBUTING.md" },
+    { "src": "SECURITY.md", "dest": "SECURITY.md" },
+    { "src": "CODE_OF_CONDUCT.md", "dest": "CODE_OF_CONDUCT.md" },
+    { "src": "docs/oss-mirror/dot-github/workflows/oss-connector-ci.yml", "dest": ".github/workflows/ci.yml" },
+    { "src": ".github/workflows/connector-release.yml", "dest": ".github/workflows/connector-release.yml" },
+    { "src": ".github/ISSUE_TEMPLATE/bug_report.yml", "dest": ".github/ISSUE_TEMPLATE/bug_report.yml" },
+    { "src": ".github/ISSUE_TEMPLATE/config.yml", "dest": ".github/ISSUE_TEMPLATE/config.yml" },
+    { "src": ".github/ISSUE_TEMPLATE/feature_request.yml", "dest": ".github/ISSUE_TEMPLATE/feature_request.yml" },
+    { "src": ".github/pull_request_template.md", "dest": ".github/pull_request_template.md" },
+    { "src": "docs/oss-mirror/dot-github/CODEOWNERS", "dest": ".github/CODEOWNERS" }
+  ]
+}

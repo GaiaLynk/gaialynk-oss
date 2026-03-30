@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "GaiaLynk Connector",
+  "version": "0.1.2",
+  "identifier": "com.gaialynk.connector",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:* https: wss:; img-src 'self' data: asset: blob:; style-src 'self' 'unsafe-inline'",
+      "capabilities": ["default"]
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "GaiaLynk Connector",
+        "width": 460,
+        "height": 640,
+        "resizable": true
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "RWSkM2eaOLtgcFdWvf+xePfr7m+m22yTdvtTU8kj98+cnzTdVQUb/4Ka",
+      "endpoints": [
+        "https://github.com/GaiaLynk/gaialynk-oss/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
