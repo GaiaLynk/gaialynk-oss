@@ -136,6 +136,11 @@ node packages/connector/scripts/generate-updater-manifest.mjs \
 - **`incorrect updater private key password: Device not configured (os error 6)`**（本地脚本、CI 非交互环境常见）：多为**无密码密钥**却**未设置**环境变量 **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`**（「未设置」与「设为空字符串」在 Tauri 里行为不同——未设置会走交互读终端）。处理：**`export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""`** 后再构建；CI 侧使用本仓库 **connector-release** 工作流里 **`Export TAURI_SIGNING_PRIVATE_KEY_PASSWORD`** 一步，或自行等价写入 `GITHUB_ENV`。
 - **`incorrect updater private key password: Missing encoded key in secret key`** / **`Missing comment in secret key`**：① **最常见**：`TAURI_SIGNING_PRIVATE_KEY` 在 CI 里实际为**空**（密钥只配在 **Environment secrets** 而未在 job 上使用 `environment:`，或未配 **Repository secret**）——见上文 **「务必使用仓库级 Secret」**。② 其次：密码与密钥不匹配、粘错 `.pub`、Base64 截断/多字符等。处理顺序：在 **Repository secrets** 中重设 `TAURI_SIGNING_PRIVATE_KEY`；无密码时删掉错误的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 并依赖 workflow 中的空密码导出；仍失败再考虑重新生成密钥对并更新 `tauri.conf.json` 的 `pubkey`。
 
+## 分仓部署验证（公仓 `gaialynk-oss`）
+
+- 同步白名单后，在 **公仓** 打 `connector-v*` tag 会触发本指南对应的 Release 工作流；`latest.json` 应出现在该 Release 资产中（匿名 URL 见 `tauri.conf.json` → `updater.endpoints`）。
+- 本次验证戳：**2026-03-30**（Connector 版本与 tag 对齐见下文版本号）。
+
 ## 相关文件
 
 | 说明           | 路径 |
