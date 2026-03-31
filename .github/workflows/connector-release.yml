@@ -10,6 +10,10 @@
 #
 # macOS：aarch64 与 x86_64 分两个 job，x86_64 needs aarch64，同一时刻只占用 1 个 macOS Runner。
 # Windows 与 publish-macos-aarch64 并行。
+# macOS 公证：等待时间主要取决于 Apple 侧队列/API，与 .app 体积几乎无关（notarytool 提交后轮询直至终态）。
+# 已知情况：Notary 服务曾出现大面积「长时间 In Progress」、论坛有 90min+ 案例（tauri#14579、electron/notarize#179）；非「包太大上传慢」。
+# 若 job 在「Notarizing …」卡到 timeout：先查日志是否出现 NSURLError / HTTP 401；可错峰 Re-run；紧急可用 tauri build --skip-stapling（不等待公证完成即结束，产物可能尚未可分发，慎用）。
+# 本 workflow：mac job 含 Apple 连通性预检 + --verbose；仅使用 Apple ID 公证时勿设 APPLE_API_*（避免误配 Key ID）。
 
 name: Connector release
 
@@ -65,12 +69,21 @@ jobs:
             echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing or too short. Add it under Settings → Secrets and variables → Actions → **Secrets** (repository scope). If it only exists under Environments, either add the same secret at repo level or set job.environment in this workflow."
             exit 1
           fi
-      # TAURI_SIGNING_PRIVATE_KEY 须为「私钥文件 → Base64 → 单行」；勿粘 minisign 多行明文（见 Connector-Release-Guide）。
+      # Windows：超长 Base64 经 step env → npm → tauri 链路易出现截断/乱码，导致 Missing encoded key。写入文件后用 TAURI_SIGNING_PRIVATE_KEY_PATH（与 CLI signer 一致）。
+      - name: Materialize TAURI_SIGNING_PRIVATE_KEY to file
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          f="${RUNNER_TEMP}/tauri-updater.key"
+          printf '%s' "$KEY" > "$f"
+          echo "TAURI_SIGNING_PRIVATE_KEY_PATH=$f" >> "$GITHUB_ENV"
+          echo "Updater key file size (bytes): $(wc -c < "$f" | tr -d ' ')"
+      # 勿再向本 step 注入 TAURI_SIGNING_PRIVATE_KEY 字符串，避免与 PATH 双轨；密钥须为 Base64 单行（见 Connector-Release-Guide）。
       - uses: tauri-apps/tauri-action@v0
         env:
           CI: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           projectPath: packages/connector
           tagName: ${{ github.ref_name }}
@@ -88,7 +101,7 @@ jobs:
 
   publish-macos-aarch64:
     runs-on: macos-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
@@ -123,7 +136,27 @@ jobs:
             echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing or too short. Add it under Settings → Secrets and variables → Actions → **Secrets** (repository scope). If it only exists under Environments, either add the same secret at repo level or set job.environment in this workflow."
             exit 1
           fi
-      # TAURI_SIGNING_PRIVATE_KEY：Base64 单行私钥（见 docs/Connector-Release-Guide-v1.md）。
+      - name: Materialize TAURI_SIGNING_PRIVATE_KEY to file
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          f="${RUNNER_TEMP}/tauri-updater.key"
+          printf '%s' "$KEY" > "$f"
+          echo "TAURI_SIGNING_PRIVATE_KEY_PATH=$f" >> "$GITHUB_ENV"
+          echo "Updater key file size (bytes): $(wc -c < "$f" | tr -d ' ')"
+      - name: Preflight Apple / network (notary endpoints)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== reachability (fail fast if runner has no route to Apple) =="
+          curl -sfI --max-time 30 https://appstoreconnect.apple.com/ | head -n 1 || {
+            echo "::error::Cannot reach appstoreconnect.apple.com — notarization will not work on this runner."
+            exit 1
+          }
+          curl -sfI --max-time 30 https://appleid.apple.com/ | head -n 1 || {
+            echo "::warning::appleid.apple.com HEAD failed (notary may still work); continuing."
+          }
       - uses: tauri-apps/tauri-action@v0
         env:
           CI: false
@@ -135,9 +168,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           projectPath: packages/connector
           tagName: ${{ github.ref_name }}
@@ -151,12 +181,12 @@ jobs:
           generateReleaseNotes: true
           prerelease: false
           includeUpdaterJson: true
-          args: "--target aarch64-apple-darwin"
+          args: "--verbose --target aarch64-apple-darwin"
 
   publish-macos-x86_64:
     needs: publish-macos-aarch64
     runs-on: macos-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
@@ -191,7 +221,27 @@ jobs:
             echo "::error::TAURI_SIGNING_PRIVATE_KEY is missing or too short. Add it under Settings → Secrets and variables → Actions → **Secrets** (repository scope). If it only exists under Environments, either add the same secret at repo level or set job.environment in this workflow."
             exit 1
           fi
-      # TAURI_SIGNING_PRIVATE_KEY：Base64 单行私钥（见 docs/Connector-Release-Guide-v1.md）。
+      - name: Materialize TAURI_SIGNING_PRIVATE_KEY to file
+        shell: bash
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          f="${RUNNER_TEMP}/tauri-updater.key"
+          printf '%s' "$KEY" > "$f"
+          echo "TAURI_SIGNING_PRIVATE_KEY_PATH=$f" >> "$GITHUB_ENV"
+          echo "Updater key file size (bytes): $(wc -c < "$f" | tr -d ' ')"
+      - name: Preflight Apple / network (notary endpoints)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "== reachability (fail fast if runner has no route to Apple) =="
+          curl -sfI --max-time 30 https://appstoreconnect.apple.com/ | head -n 1 || {
+            echo "::error::Cannot reach appstoreconnect.apple.com — notarization will not work on this runner."
+            exit 1
+          }
+          curl -sfI --max-time 30 https://appleid.apple.com/ | head -n 1 || {
+            echo "::warning::appleid.apple.com HEAD failed (notary may still work); continuing."
+          }
       - uses: tauri-apps/tauri-action@v0
         env:
           CI: false
@@ -203,9 +253,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           projectPath: packages/connector
           tagName: ${{ github.ref_name }}
@@ -219,4 +266,4 @@ jobs:
           generateReleaseNotes: true
           prerelease: false
           includeUpdaterJson: true
-          args: "--target x86_64-apple-darwin"
+          args: "--verbose --target x86_64-apple-darwin"

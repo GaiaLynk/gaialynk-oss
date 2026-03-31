@@ -37,6 +37,8 @@ git push origin connector-v0.2.0
 
 具体环境变量以 [Tauri macOS 签名文档](https://v2.tauri.app/distribute/sign/macos/) 为准。
 
+**公证卡住数小时**：与安装包体积**无必然关系**（`notarytool` 提交后轮询 Apple，队列/故障时小包也会长时间停在 `Notarizing …`）。若已用 **Apple ID 三条**（`APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID`），workflow **不要**再注入 `APPLE_API_ISSUER` / `APPLE_API_KEY`（易与「API Key 路线」混淆；Tauri 虽优先 Apple ID，但减少误配）。Actions 日志请搜 `NSURLError`、`HTTP`、`401`、`offline`；工作流含对 `appstoreconnect.apple.com` 的预检。紧急排障见 Tauri `--skip-stapling`（**不等待公证完成**，产物可能尚不可分发，仅作解锁 CI 用）。
+
 本地验收：`spctl --assess --type execute -v path/to/GaiaLynk\ Connector.app`。
 
 ## GitHub Release 与下载 URL（Railway）
@@ -81,7 +83,7 @@ Tauri 会将 `productName`「GaiaLynk Connector」中的空格变为 **`.`**，�
 
 **务必使用「仓库级」Actions Secret，不要只写在 Environment 里**（除非你在 workflow 的 job 上显式写了 `environment:` 且密钥配置在该 Environment 下）。若密钥只存在于 **Settings → Environments → 某环境 → Environment secrets**，而 **connector-release** 工作流**没有**引用该 environment，则 `secrets.TAURI_SIGNING_PRIVATE_KEY` 在 CI 里为**空**，Tauri 会报 **`Missing encoded key in secret key`** / **`Missing comment in secret key`** 等（与 [tauri-action#658](https://github.com/tauri-apps/tauri-action/issues/658) 中案例一致）。正确做法：在 **Settings → Secrets and variables → Actions** 下 **Repository secrets** 中新增 `TAURI_SIGNING_PRIVATE_KEY`（及按需的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。
 
-本仓库工作流在构建前会校验密钥**非空**（输出长度、过短则失败并提示上述路径）。
+本仓库工作流在构建前会校验密钥**非空**（输出长度、过短则失败并提示上述路径），再将 Secret 写入 **`RUNNER_TEMP/tauri-updater.key`** 并设置 **`TAURI_SIGNING_PRIVATE_KEY_PATH`**（避免 Windows 上超长 **`TAURI_SIGNING_PRIVATE_KEY`** 环境变量链路透传导致 **`Missing encoded key`**）。
 
 Tauri 在构建时会把该 Secret **按 Base64 解码**后再用于 minisign。因此仓库 **Settings → Secrets → Actions** 里保存的必须是：
 
