@@ -83,7 +83,7 @@ Tauri 会将 `productName`「GaiaLynk Connector」中的空格变为 **`.`**，�
 
 **务必使用「仓库级」Actions Secret，不要只写在 Environment 里**（除非你在 workflow 的 job 上显式写了 `environment:` 且密钥配置在该 Environment 下）。若密钥只存在于 **Settings → Environments → 某环境 → Environment secrets**，而 **connector-release** 工作流**没有**引用该 environment，则 `secrets.TAURI_SIGNING_PRIVATE_KEY` 在 CI 里为**空**，Tauri 会报 **`Missing encoded key in secret key`** / **`Missing comment in secret key`** 等（与 [tauri-action#658](https://github.com/tauri-apps/tauri-action/issues/658) 中案例一致）。正确做法：在 **Settings → Secrets and variables → Actions** 下 **Repository secrets** 中新增 `TAURI_SIGNING_PRIVATE_KEY`（及按需的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`）。
 
-本仓库工作流在构建前会校验密钥**非空**（输出长度、过短则失败并提示上述路径），再将 Secret 写入 **`RUNNER_TEMP/tauri-updater.key`** 并设置 **`TAURI_SIGNING_PRIVATE_KEY_PATH`**（避免 Windows 上超长 **`TAURI_SIGNING_PRIVATE_KEY`** 环境变量链路透传导致 **`Missing encoded key`**）。
+本仓库工作流在构建前会校验密钥**非空**（输出长度、过短则失败并提示上述路径），再将 Secret 写入 **`RUNNER_TEMP/tauri-updater.key`** 并设置 **`TAURI_SIGNING_PRIVATE_KEY_PATH`**（便于核对文件大小）。**`tauri-apps/tauri-action` 一步还须显式注入 `TAURI_SIGNING_PRIVATE_KEY`**：`@tauri-apps/cli` 2.10+ 生成 updater **`.sig`** 时以该变量为准；若仅依赖 `GITHUB_ENV` 里的 `_PATH`，会报错 **`A public key has been found, but no private key`**（与 Windows / mac 无关，三 job 均已注入）。
 
 Tauri 在构建时会把该 Secret **按 Base64 解码**后再用于 minisign。因此仓库 **Settings → Secrets → Actions** 里保存的必须是：
 

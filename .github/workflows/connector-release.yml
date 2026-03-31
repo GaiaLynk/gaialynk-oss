@@ -79,11 +79,13 @@ jobs:
           printf '%s' "$KEY" > "$f"
           echo "TAURI_SIGNING_PRIVATE_KEY_PATH=$f" >> "$GITHUB_ENV"
           echo "Updater key file size (bytes): $(wc -c < "$f" | tr -d ' ')"
-      # 勿再向本 step 注入 TAURI_SIGNING_PRIVATE_KEY 字符串，避免与 PATH 双轨；密钥须为 Base64 单行（见 Connector-Release-Guide）。
+      # Tauri CLI ≥2.10 在生成 updater `.sig` 时读取 `TAURI_SIGNING_PRIVATE_KEY`（Base64 单行）；仅设 `TAURI_SIGNING_PRIVATE_KEY_PATH` 会报「public key found, no private key」。
+      # 仍保留上一步写入文件，便于核对大小；构建进程以 Secret 直传为准（一般远小于 Windows 环境变量上限）。
       - uses: tauri-apps/tauri-action@v0
         env:
           CI: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         with:
           projectPath: packages/connector
           tagName: ${{ github.ref_name }}
@@ -161,6 +163,7 @@ jobs:
         env:
           CI: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
@@ -246,6 +249,7 @@ jobs:
         env:
           CI: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
