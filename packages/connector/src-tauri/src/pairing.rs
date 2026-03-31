@@ -21,6 +21,15 @@ pub struct PairStatusBody {
     pub device_id: Option<String>,
 }
 
+/// 主线 `pair-status` 响应为 `{ "data": { "status", ... } }`（与 E-20 测试一致）。
+/// 兼容旧版扁平 JSON（见 `PROTOCOL.md` 历史示例）。
+fn parse_pair_status_json(v: serde_json::Value) -> anyhow::Result<PairStatusBody> {
+    if let Some(d) = v.get("data") {
+        return Ok(serde_json::from_value(d.clone())?);
+    }
+    Ok(serde_json::from_value(v)?)
+}
+
 pub async fn fetch_pair_status(
     client: &reqwest::Client,
     mainline_base: &str,
@@ -29,7 +38,8 @@ pub async fn fetch_pair_status(
     let base = mainline_base.trim_end_matches('/');
     let url = format!("{base}/api/v1/connectors/desktop/pair-status?pairing_code={pairing_code}");
     let res = client.get(&url).send().await?.error_for_status()?;
-    Ok(res.json().await?)
+    let v: serde_json::Value = res.json().await?;
+    parse_pair_status_json(v)
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -130,6 +140,34 @@ mod tests {
         let a = build_signed_receipt_at("sec1", "dev1", "file_list", "h", "ok", None, ts);
         let b = build_signed_receipt_at("sec2", "dev1", "file_list", "h", "ok", None, ts);
         assert_ne!(a.env_signature, b.env_signature);
+    }
+
+    #[test]
+    fn parse_pair_status_accepts_data_wrapper() {
+        let j = serde_json::json!({
+            "data": {
+                "status": "completed",
+                "device_token": "t",
+                "device_secret": "s",
+                "device_id": "550e8400-e29b-41d4-a716-446655440000"
+            }
+        });
+        let b = parse_pair_status_json(j).unwrap();
+        assert_eq!(b.status, "completed");
+        assert_eq!(b.device_token.as_deref(), Some("t"));
+    }
+
+    #[test]
+    fn parse_pair_status_accepts_flat_body() {
+        let j = serde_json::json!({
+            "status": "pending",
+            "device_token": null,
+            "device_secret": null,
+            "device_id": null
+        });
+        let b = parse_pair_status_json(j).unwrap();
+        assert_eq!(b.status, "pending");
+        assert!(b.device_token.is_none());
     }
 }
 

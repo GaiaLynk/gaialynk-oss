@@ -36,6 +36,16 @@ npx tauri icon src-tauri/icons/1024x1024.png
 
 产物体积与「小于 15MB」目标依赖 **release + strip + UPX（可选）**；需在 CI 上对 `aarch64-apple-darwin`、`x86_64-pc-windows-msvc` 等目标实测。
 
+## 界面语言
+
+- 支持 **English**、**简体中文**、**繁體中文**（与官网 `en` / `zh-Hans` / `zh-Hant` 一致）。
+- 首次启动按 **系统/浏览器语言** 推断；在窗口右上角 **语言** 下拉切换，选择写入 **localStorage**（`gaialynk.connector.locale`），下次打开沿用。
+
+## 命令错误（多语言）
+
+- Tauri 命令失败时，Rust 返回 **JSON 字符串**：`{"code":"MOUNT_LIMIT_REACHED"}` 或带 `detail` 的 `CONFIG_SAVE_FAILED` / `DIALOG_TASK_FAILED` / `PATH_RESOLVE_FAILED`。
+- 前端按当前界面语言展开文案；非 JSON 或未知 `code` 时回退为原始消息。
+
 ## 文档
 
 - 主网与本地 API 契约：`PROTOCOL.md`

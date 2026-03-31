@@ -1,3 +1,4 @@
+mod command_error;
 mod config;
 mod fs_ops;
 mod local_server;
@@ -38,10 +39,13 @@ async fn get_status(state: tauri::State<'_, SharedState>) -> Result<StatusPayloa
 async fn set_mainline_base_url(
     state: tauri::State<'_, SharedState>,
     url: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let mut st = state.write().await;
-    st.config.mainline_base_url = url.trim_end_matches('/').to_string();
-    config::save(&st.config).map_err(|e| e.to_string())
+    let norm = config::normalize_mainline_base_url(&url);
+    st.config.mainline_base_url = norm.clone();
+    config::save(&st.config)
+        .map_err(|e| command_error::config_save_failed(e.to_string()))?;
+    Ok(norm)
 }
 
 #[tauri::command]
@@ -51,7 +55,7 @@ async fn regenerate_pairing_code(state: tauri::State<'_, SharedState>) -> Result
     st.config.device_token = None;
     st.config.device_secret = None;
     st.config.device_id = None;
-    config::save(&st.config).map_err(|e| e.to_string())
+    config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))
 }
 
 #[tauri::command]
@@ -63,26 +67,26 @@ async fn add_mount_directory(
     {
         let st = state.read().await;
         if st.config.mounted_roots.len() >= 5 {
-            return Err("最多挂载 5 个工作区根目录".to_string());
+            return Err(command_error::mount_limit_reached());
         }
     }
     let h = app.clone();
     let picked = tokio::task::spawn_blocking(move || h.dialog().file().blocking_pick_folder())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| command_error::dialog_task_failed(e.to_string()))?;
     let Some(file_path) = picked else {
         return Ok(());
     };
     let path = file_path
         .into_path()
-        .map_err(|e| format!("无法解析所选目录: {e}"))?
+        .map_err(|e| command_error::path_resolve_failed(e.to_string()))?
         .to_string_lossy()
         .to_string();
     let mut st = state.write().await;
     if !st.config.mounted_roots.contains(&path) {
         st.config.mounted_roots.push(path);
     }
-    config::save(&st.config).map_err(|e| e.to_string())
+    config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))
 }
 
 async fn pairing_poll_loop(shared: SharedState) {

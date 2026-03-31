@@ -4,8 +4,10 @@
 
 ## 触发发布
 
-1. 将 `packages/connector/src-tauri/tauri.conf.json` 与 `packages/connector/src-tauri/Cargo.toml` 中的 **version** 与将要打的 tag **语义化版本对齐**（例如 `0.2.0`）。
-2. 创建并推送 tag（前缀固定为 `connector-v`）：
+> **公开下载与自动更新**依赖 **`GaiaLynk/gaialynk-oss`** 上的 Release（`tauri.conf.json` 内 updater **`endpoints`** 指向该仓的 **`latest.json`**）。**请先**按 **`docs/GitHub-Private-Public-Split-Runbook-v1.md` §2 +「Connector 公开发布」** 完成 **白名单同步到 OSS**，**再**在 **`gaialynk-oss`** 上打下面的 tag。仅在 **`gaialynk-internal`** 打 `connector-v*` 只会触发私仓上的 Actions（若已启用），**不会**更新 OSS 的公开包。
+
+1. 将 `packages/connector/src-tauri/tauri.conf.json` 与 `packages/connector/src-tauri/Cargo.toml` 中的 **version** 与将要打的 tag **语义化版本对齐**（例如 `0.2.0`），且该版本已随 **`gaialynk-oss` 的 `main`** 同步可见（见上 Runbook）。
+2. 在 **`gaialynk-oss`** 仓库（克隆的 `origin` 指向本仓）中创建并推送 tag（前缀固定为 `connector-v`）：
 
 ```bash
 git tag connector-v0.2.0
@@ -58,16 +60,20 @@ git push origin connector-v0.2.0
 
 Tauri 会将 `productName`「GaiaLynk Connector」中的空格变为 **`.`**，故文件名形如 **`GaiaLynk.Connector_<version>_<arch>.dmg`**，Windows 常见还有 **`_x64_en-US.msi`**、**`-setup.exe`**。**勿**使用文档里偶见的 `GaiaLynk-Connector_…` 写法（连字符），否则 404。
 
-### connector-v0.1.2 直链模板（发布完成后务必对照 Release Assets 逐字核对）
+### connector-v0.1.6 直链模板（发布完成后务必对照 Release Assets 逐字核对）
 
-在 **Vercel / Railway**（或任一托管官网的环境变量）中写入：
+在 **Vercel**（官网 `packages/website`）**Environment Variables** 中写入（**不设则下载页 / 首页板块 / 设置页仍为「即将发布」占位**）：
 
 | 变量 | 推荐值（tag 固定，不依赖 `latest`） | 说明 |
 |------|--------------------------------------|------|
-| `DESKTOP_CONNECTOR_DOWNLOAD_URL_MAC` | `https://github.com/GaiaLynk/gaialynk-oss/releases/download/connector-v0.1.2/GaiaLynk.Connector_0.1.2_aarch64.dmg` | 官网仅一个 Mac 直链位：**Apple Silicon（aarch64）**。Intel Mac 需从 [Releases](https://github.com/GaiaLynk/gaialynk-oss/releases) 取 **`…_x64.dmg`**。 |
-| `DESKTOP_CONNECTOR_DOWNLOAD_URL_WIN` | `https://github.com/GaiaLynk/gaialynk-oss/releases/download/connector-v0.1.2/GaiaLynk.Connector_0.1.2_x64_en-US.msi` | 与 `0.1.0` 资产命名一致；若 CI 只上传 `.exe` 未上传 `.msi`，则改为 `…_x64-setup.exe`。 |
+| `DESKTOP_CONNECTOR_DOWNLOAD_URL_MAC` | `https://github.com/GaiaLynk/gaialynk-oss/releases/download/connector-v0.1.6/GaiaLynk.Connector_0.1.6_aarch64.dmg` | 官网仅一个 Mac 直链位：**Apple Silicon（aarch64）**。Intel Mac 需从 [Releases](https://github.com/GaiaLynk/gaialynk-oss/releases) 取 **`…_x64.dmg`**。 |
+| `DESKTOP_CONNECTOR_DOWNLOAD_URL_WIN` | `https://github.com/GaiaLynk/gaialynk-oss/releases/download/connector-v0.1.6/GaiaLynk.Connector_0.1.6_x64_en-US.msi` | 与 Tauri 资产命名一致；若某次 Release 未上传 `.msi`，可改为 **`…_x64-setup.exe`**。 |
 
-**运维核对步骤**：打开 [connector-v0.1.2 Release](https://github.com/GaiaLynk/gaialynk-oss/releases/tag/connector-v0.1.2) → 复制 Assets 里 **与上表完全一致** 的文件名 → 拼进 `…/download/connector-v0.1.2/<文件名>`。若公证/打包调整导致文件名差异，**以页面为准** 更新环境变量。
+可选：**`NEXT_PUBLIC_DESKTOP_CONNECTOR_RELEASES_URL`** = `https://github.com/GaiaLynk/gaialynk-oss/releases`（代码默认已是该地址，仅在不同时覆盖）。
+
+写入后 **重新部署** 官网；无需改代码即可启用下载按钮。
+
+**运维核对步骤**：打开 [connector-v0.1.6 Release](https://github.com/GaiaLynk/gaialynk-oss/releases/tag/connector-v0.1.6) → 复制 Assets 里 **与上表完全一致** 的文件名 → 拼进 `…/download/connector-v0.1.6/<文件名>`。若打包调整导致文件名差异，**以页面为准** 更新环境变量。
 
 ## Tauri 自动更新（latest.json）
 

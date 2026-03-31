@@ -6,6 +6,22 @@ use std::path::PathBuf;
 
 use crate::pairing;
 
+/// 官网 `www` / apex 域名不提供 `/api/v1/*`（该路径在主线 Hono 上）。用户常误填浏览器地址栏，此处纠偏为对外 API 域。
+pub fn normalize_mainline_base_url(raw: &str) -> String {
+    let s = raw.trim().trim_end_matches('/').to_string();
+    let lower = s.to_lowercase();
+    if matches!(
+        lower.as_str(),
+        "https://www.gaialynk.com"
+            | "http://www.gaialynk.com"
+            | "https://gaialynk.com"
+            | "http://gaialynk.com"
+    ) {
+        return "https://api.gaialynk.com".to_string();
+    }
+    s
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedConfig {
     pub mainline_base_url: String,
@@ -48,7 +64,12 @@ pub fn config_path() -> PathBuf {
 pub fn load() -> PersistedConfig {
     let path = config_path();
     if let Ok(bytes) = std::fs::read(&path) {
-        if let Ok(c) = serde_json::from_slice::<PersistedConfig>(&bytes) {
+        if let Ok(mut c) = serde_json::from_slice::<PersistedConfig>(&bytes) {
+            let norm = normalize_mainline_base_url(&c.mainline_base_url);
+            if norm != c.mainline_base_url {
+                c.mainline_base_url = norm;
+                let _ = save(&c);
+            }
             return c;
         }
     }

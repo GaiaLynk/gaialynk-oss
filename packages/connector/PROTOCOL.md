@@ -10,14 +10,18 @@
 GET /api/v1/connectors/desktop/pair-status?pairing_code={6位数字}
 ```
 
-**响应 JSON（示例）**
+**响应 JSON（主线 E-20 实际形态）**
+
+包一层 `data`（与 `packages/server` 其它 JSON 一致）：
 
 ```json
 {
-  "status": "pending",
-  "device_token": null,
-  "device_secret": null,
-  "device_id": null
+  "data": {
+    "status": "pending",
+    "device_token": null,
+    "device_secret": null,
+    "device_id": null
+  }
 }
 ```
 
@@ -25,12 +29,16 @@ GET /api/v1/connectors/desktop/pair-status?pairing_code={6位数字}
 
 ```json
 {
-  "status": "completed",
-  "device_token": "<JWT>",
-  "device_secret": "<utf8 secret for HMAC>",
-  "device_id": "<uuid>"
+  "data": {
+    "status": "completed",
+    "device_token": "<JWT>",
+    "device_secret": "<utf8 secret for HMAC>",
+    "device_id": "<uuid>"
+  }
 }
 ```
+
+> Connector 客户端解析时 **同时兼容** 无 `data` 包裹的扁平 JSON（旧文档 / 本地 mock）。
 
 > Web 侧 `POST /api/v1/connectors/desktop/pair` 由 **E-20** 定义；Connector 仅需轮询 `pair-status`。
 
