@@ -18,7 +18,11 @@ type StatusPayload = {
   device_id: string | null;
 };
 
+const UPDATER_LOG = "[GaiaLynk Connector updater]";
+
 let activeLocale: Locale = resolveInitialLocale();
+let updateCheckInFlight = false;
+let trayUpdateListenerRegistered = false;
 
 function applyChromeLocale(locale: Locale): void {
   document.documentElement.lang = locale;
@@ -37,6 +41,94 @@ function el(html: string): HTMLElement {
   return n;
 }
 
+function setUpdateCheckFeedback(text: string, cls: string): void {
+  const el = document.getElementById("update-check-feedback");
+  if (!el) return;
+  el.textContent = text;
+  el.className = `feedback ${cls}`.trim();
+}
+
+function clearUpdateCheckFeedback(): void {
+  const el = document.getElementById("update-check-feedback");
+  if (!el) return;
+  el.textContent = "";
+  el.className = "feedback";
+}
+
+/**
+ * @param userInitiated 为 true 时展示进度/结果（按钮、托盘「检查更新」）；为 false 时仅启动静默检查，失败只打控制台便于排查。
+ */
+async function runUpdateCheck(userInitiated: boolean): Promise<void> {
+  if (updateCheckInFlight) return;
+  updateCheckInFlight = true;
+  const m = getMessages(activeLocale);
+  const btn = (): HTMLElement | null => document.getElementById("btn-check-updates");
+  try {
+    if (userInitiated) {
+      setUpdateCheckFeedback(m.updateChecking, "pending");
+      btn()?.toggleAttribute("disabled", true);
+    }
+    const { check } = await import("@tauri-apps/plugin-updater");
+    const update = await check();
+    if (userInitiated) {
+      clearUpdateCheckFeedback();
+      btn()?.toggleAttribute("disabled", false);
+    }
+    if (!update) {
+      if (userInitiated) {
+        const { getVersion } = await import("@tauri-apps/api/app");
+        window.alert(m.updateUpToDate(await getVersion()));
+      } else {
+        console.info(UPDATER_LOG, "No update available at startup.");
+      }
+      return;
+    }
+    const msg = m.updateAvailable(update.version, update.currentVersion);
+    const ok = window.confirm(msg);
+    if (ok) {
+      await update.downloadAndInstall();
+    }
+    await update.close();
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error(UPDATER_LOG, "check() failed:", detail, e);
+    if (userInitiated) {
+      clearUpdateCheckFeedback();
+      btn()?.toggleAttribute("disabled", false);
+      window.alert(m.updateCheckFailed(detail));
+    } else {
+      console.warn(
+        UPDATER_LOG,
+        "Startup check failed silently. Open the window and tap「检查更新 / Check for updates」, or see DevTools console (if enabled).",
+      );
+    }
+  } finally {
+    updateCheckInFlight = false;
+  }
+}
+
+async function registerTrayUpdateListener(): Promise<void> {
+  if (trayUpdateListenerRegistered) return;
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    await listen("connector-check-updates", () => {
+      void runUpdateCheck(true);
+    });
+    trayUpdateListenerRegistered = true;
+  } catch {
+    /* 浏览器 dev 无 Tauri */
+  }
+}
+
+/** 托盘菜单文案与界面语言对齐，并写入本地 config.json（`ui_locale`）。 */
+async function syncTrayLocale(locale: Locale): Promise<void> {
+  try {
+    await invoke("set_ui_locale", { locale });
+  } catch {
+    /* 浏览器 dev 无 Tauri */
+  }
+}
+
 async function render() {
   const root = document.getElementById("app");
   if (!root) return;
@@ -51,16 +143,20 @@ async function render() {
     el(`
     <main class="wrap">
       <div class="toolbar">
-        <label class="lang-label" for="lang-select">${escapeAttr(m.languageLabel)}</label>
-        <select id="lang-select" class="lang-select" aria-label="${escapeAttr(m.languageLabel)}">
-          ${SUPPORTED_LOCALES.map(
-            (loc) =>
-              `<option value="${loc}"${loc === activeLocale ? " selected" : ""}>${escapeAttr(
-                localeOptionLabel(m, loc),
-              )}</option>`,
-          ).join("")}
-        </select>
+        <button id="btn-check-updates" class="btn-secondary" type="button">${escapeAttr(m.btnCheckUpdates)}</button>
+        <div class="toolbar-right">
+          <label class="lang-label" for="lang-select">${escapeAttr(m.languageLabel)}</label>
+          <select id="lang-select" class="lang-select" aria-label="${escapeAttr(m.languageLabel)}">
+            ${SUPPORTED_LOCALES.map(
+              (loc) =>
+                `<option value="${loc}"${loc === activeLocale ? " selected" : ""}>${escapeAttr(
+                  localeOptionLabel(m, loc),
+                )}</option>`,
+            ).join("")}
+          </select>
+        </div>
       </div>
+      <p id="update-check-feedback" class="feedback update-check-feedback" aria-live="polite"></p>
       <p id="invoke-err" class="feedback err invoke-err" role="alert"></p>
       <h1>${escapeAttr(m.title)}</h1>
       <section class="card">
@@ -97,6 +193,10 @@ async function render() {
   `),
   );
 
+  document.getElementById("btn-check-updates")?.addEventListener("click", () => {
+    void runUpdateCheck(true);
+  });
+
   document.getElementById("lang-select")?.addEventListener("change", (ev) => {
     const sel = ev.target as HTMLSelectElement;
     const v = sel.value;
@@ -104,6 +204,7 @@ async function render() {
       activeLocale = v;
       setStoredLocale(v);
       applyChromeLocale(v);
+      void syncTrayLocale(v);
       void render();
     }
   });
@@ -180,7 +281,10 @@ const style = document.createElement("style");
 style.textContent = `
   body { font-family: system-ui, sans-serif; margin: 0; background: #0f1419; color: #e6edf3; }
   .wrap { max-width: 440px; margin: 0 auto; padding: 1.25rem; }
-  .toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.35rem; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem; flex-wrap: wrap; }
+  .toolbar-right { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+  .update-check-feedback { margin: 0 0 0.35rem; min-height: 0; }
+  .update-check-feedback:empty { display: none; }
   .invoke-err { margin: 0 0 0.75rem; min-height: 0; }
   .invoke-err:empty { display: none; }
   .lang-label { font-size: 0.8rem; color: #8b949e; }
@@ -198,6 +302,8 @@ style.textContent = `
   .code { font-size: 1.75rem; letter-spacing: 0.2em; font-weight: 700; font-family: ui-monospace, monospace; }
   .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
   button { background: #238636; color: #fff; border: none; padding: 0.45rem 0.75rem; border-radius: 6px; cursor: pointer; }
+  button.btn-secondary { background: transparent; color: #58a6ff; border: 1px solid #30363d; }
+  button.btn-secondary:hover { filter: none; background: #21262d; }
   button:hover { filter: brightness(1.08); }
   button:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
   input[type=text] { width: 100%; box-sizing: border-box; padding: 0.45rem; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: inherit; margin-bottom: 0.5rem; }
@@ -206,26 +312,12 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-/** 启动时检查更新（仅 Tauri 壳内有效；dev 浏览器会静默失败） */
-async function maybeCheckUpdater(): Promise<void> {
-  try {
-    const { check } = await import("@tauri-apps/plugin-updater");
-    const update = await check();
-    if (!update) return;
-    try {
-      const msg = getMessages(activeLocale).updateAvailable(update.version, update.currentVersion);
-      const ok = window.confirm(msg);
-      if (ok) {
-        await update.downloadAndInstall();
-      }
-    } finally {
-      await update.close();
-    }
-  } catch {
-    // 非 Tauri 或网络失败：忽略
-  }
+async function bootstrap(): Promise<void> {
+  applyChromeLocale(activeLocale);
+  await registerTrayUpdateListener();
+  await syncTrayLocale(activeLocale);
+  void runUpdateCheck(false);
+  await render();
 }
 
-applyChromeLocale(activeLocale);
-void maybeCheckUpdater();
-void render();
+void bootstrap();

@@ -16,6 +16,7 @@ describe("connector i18n locales", () => {
       expect(m.documentTitle.length).toBeGreaterThan(0);
       expect(m.savedWithUrl("https://example.com")).toContain("example.com");
       expect(m.errMountLimit.length).toBeGreaterThan(0);
+      expect(m.btnCheckUpdates.length).toBeGreaterThan(0);
     }
   });
 });

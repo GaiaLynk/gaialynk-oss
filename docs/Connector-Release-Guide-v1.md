@@ -60,20 +60,24 @@ git push origin connector-v0.2.0
 
 Tauri 会将 `productName`「GaiaLynk Connector」中的空格变为 **`.`**，故文件名形如 **`GaiaLynk.Connector_<version>_<arch>.dmg`**，Windows 常见还有 **`_x64_en-US.msi`**、**`-setup.exe`**。**勿**使用文档里偶见的 `GaiaLynk-Connector_…` 写法（连字符），否则 404。
 
-### connector-v0.1.6 直链模板（发布完成后务必对照 Release Assets 逐字核对）
+### 官网 / 应用内下载按钮（默认与 `latest.json` 自动对齐）
 
-在 **Vercel**（官网 `packages/website`）**Environment Variables** 中写入（**不设则下载页 / 首页板块 / 设置页仍为「即将发布」占位**）：
+营销站下载页、首页 Connector 板块、**设置 → 连接器** 在 **未同时设置** `DESKTOP_CONNECTOR_DOWNLOAD_URL_MAC` **与** `DESKTOP_CONNECTOR_DOWNLOAD_URL_WIN` 时，会在服务端请求 **`…/releases/latest/download/latest.json`**，读取 `platforms.darwin-aarch64.url` 与 `platforms.windows-x86_64.url`（与 Tauri updater 同源）。**在 `gaialynk-oss` 发新版并上传 manifest 后，一般无需再改 Vercel/Railway 下载变量**；ISR 约 5 分钟内会拿到新直链。
 
-| 变量 | 推荐值（tag 固定，不依赖 `latest`） | 说明 |
-|------|--------------------------------------|------|
+可选：**`DESKTOP_CONNECTOR_LATEST_JSON_URL`** 覆盖清单地址；**`NEXT_PUBLIC_DESKTOP_CONNECTOR_RELEASES_URL`** 覆盖 Releases 根（并用于推导默认清单 URL 与 Release notes 链接）。
+
+### 强绑固定版本（可选，需同时设置 Mac + Win）
+
+在 **Vercel**（官网 `packages/website`）**Environment Variables** 中 **同时** 写入下面两项时，站点 **不再** 拉取 `latest.json`（适合离线构建或强制钉死某 tag）：
+
+| 变量 | 示例（tag 固定） | 说明 |
+|------|------------------|------|
 | `DESKTOP_CONNECTOR_DOWNLOAD_URL_MAC` | `https://github.com/GaiaLynk/gaialynk-oss/releases/download/connector-v0.1.6/GaiaLynk.Connector_0.1.6_aarch64.dmg` | 官网仅一个 Mac 直链位：**Apple Silicon（aarch64）**。Intel Mac 需从 [Releases](https://github.com/GaiaLynk/gaialynk-oss/releases) 取 **`…_x64.dmg`**。 |
 | `DESKTOP_CONNECTOR_DOWNLOAD_URL_WIN` | `https://github.com/GaiaLynk/gaialynk-oss/releases/download/connector-v0.1.6/GaiaLynk.Connector_0.1.6_x64_en-US.msi` | 与 Tauri 资产命名一致；若某次 Release 未上传 `.msi`，可改为 **`…_x64-setup.exe`**。 |
 
-可选：**`NEXT_PUBLIC_DESKTOP_CONNECTOR_RELEASES_URL`** = `https://github.com/GaiaLynk/gaialynk-oss/releases`（代码默认已是该地址，仅在不同时覆盖）。
+写入后 **重新部署** 官网。
 
-写入后 **重新部署** 官网；无需改代码即可启用下载按钮。
-
-**运维核对步骤**：打开 [connector-v0.1.6 Release](https://github.com/GaiaLynk/gaialynk-oss/releases/tag/connector-v0.1.6) → 复制 Assets 里 **与上表完全一致** 的文件名 → 拼进 `…/download/connector-v0.1.6/<文件名>`。若打包调整导致文件名差异，**以页面为准** 更新环境变量。
+**运维核对步骤（强绑模式）**：打开对应 Release → 复制 Assets 里文件名 → 拼进 `…/download/<tag>/<文件名>`。若打包调整导致文件名差异，**以页面为准** 更新环境变量。
 
 ## Tauri 自动更新（latest.json）
 

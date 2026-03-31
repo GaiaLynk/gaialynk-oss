@@ -25,6 +25,10 @@ export type Messages = {
   localApiStarting: string;
   sectionMounts: string;
   btnPickDirectory: string;
+  btnCheckUpdates: string;
+  updateChecking: string;
+  updateUpToDate: (currentVersion: string) => string;
+  updateCheckFailed: (detail: string) => string;
   updateAvailable: (newVersion: string, currentVersion: string) => string;
   errMountLimit: string;
   errCommandConfigSave: (detail: string) => string;
@@ -62,6 +66,19 @@ const en: Messages = {
   localApiStarting: "Starting…",
   sectionMounts: "Mounted workspaces (≤5)",
   btnPickDirectory: "Choose folder…",
+  btnCheckUpdates: "Check for updates",
+  updateChecking: "Checking for updates…",
+  updateUpToDate: (v) => `You're already on the latest version (${v}).`,
+  updateCheckFailed: (detail) =>
+    [
+      "Update check failed:",
+      detail,
+      "",
+      "Try: open this URL in a browser (same network as this Mac/PC):",
+      "https://github.com/GaiaLynk/gaialynk-oss/releases/latest/download/latest.json",
+      "",
+      "Common causes: offline / proxy / firewall, or signature mismatch after a bad release.",
+    ].join("\n"),
   updateAvailable: (newVersion, currentVersion) =>
     `Update available ${newVersion} (current ${currentVersion}). Download and install now?`,
   errMountLimit: "You can mount at most 5 workspace folders.",
@@ -102,6 +119,19 @@ const zhHans: Messages = {
   localApiStarting: "启动中…",
   sectionMounts: "已挂载工作区（≤5）",
   btnPickDirectory: "选择目录…",
+  btnCheckUpdates: "检查更新",
+  updateChecking: "正在检查更新…",
+  updateUpToDate: (v) => `当前已是最新版本（${v}）。`,
+  updateCheckFailed: (detail) =>
+    [
+      "检查更新失败：",
+      detail,
+      "",
+      "请尝试在浏览器打开（与本机同一网络）：",
+      "https://github.com/GaiaLynk/gaialynk-oss/releases/latest/download/latest.json",
+      "",
+      "常见原因：离线 / 代理 / 防火墙拦截，或发布端签名与客户端公钥不一致。",
+    ].join("\n"),
   updateAvailable: (newVersion, currentVersion) =>
     `发现新版本 ${newVersion}（当前 ${currentVersion}），是否下载并安装？`,
   errMountLimit: "最多只能挂载 5 个工作区根目录。",
@@ -141,6 +171,19 @@ const zhHant: Messages = {
   localApiStarting: "啟動中…",
   sectionMounts: "已掛載工作區（≤5）",
   btnPickDirectory: "選擇目錄…",
+  btnCheckUpdates: "檢查更新",
+  updateChecking: "正在檢查更新…",
+  updateUpToDate: (v) => `目前已是最新版本（${v}）。`,
+  updateCheckFailed: (detail) =>
+    [
+      "檢查更新失敗：",
+      detail,
+      "",
+      "請在瀏覽器開啟（與本機相同網路）：",
+      "https://github.com/GaiaLynk/gaialynk-oss/releases/latest/download/latest.json",
+      "",
+      "常見原因：離線／代理／防火牆，或發佈端簽章與客戶端公鑰不一致。",
+    ].join("\n"),
   updateAvailable: (newVersion, currentVersion) =>
     `發現新版本 ${newVersion}（目前 ${currentVersion}），是否下載並安裝？`,
   errMountLimit: "最多只能掛載 5 個工作區根目錄。",

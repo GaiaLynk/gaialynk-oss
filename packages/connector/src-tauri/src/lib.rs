@@ -3,6 +3,7 @@ mod config;
 mod fs_ops;
 mod local_server;
 mod pairing;
+mod tray_labels;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,7 +11,38 @@ use std::time::Duration;
 use local_server::{ServerState, SharedState};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
+use tauri::Emitter;
 use tauri::Manager;
+
+#[derive(Clone)]
+struct TrayMenuItems {
+    show: MenuItem<tauri::Wry>,
+    check_updates: MenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+
+#[tauri::command]
+async fn set_ui_locale(
+    state: tauri::State<'_, SharedState>,
+    tray: tauri::State<'_, TrayMenuItems>,
+    locale: String,
+) -> Result<(), String> {
+    let loc = tray_labels::normalize_locale(&locale).to_string();
+    let (show_t, check_t, quit_t) = tray_labels::labels_for(&loc);
+    tray
+        .show
+        .set_text(show_t)
+        .map_err(|e| e.to_string())?;
+    tray
+        .check_updates
+        .set_text(check_t)
+        .map_err(|e| e.to_string())?;
+    tray.quit.set_text(quit_t).map_err(|e| e.to_string())?;
+    let mut st = state.write().await;
+    st.config.ui_locale = loc;
+    config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))?;
+    Ok(())
+}
 
 #[derive(Clone, serde::Serialize)]
 struct StatusPayload {
@@ -129,8 +161,10 @@ async fn pairing_poll_loop(shared: SharedState) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let loaded = config::load();
+    let initial_tray_locale = tray_labels::normalize_locale(&loaded.ui_locale).to_string();
     let shared: SharedState = Arc::new(tokio::sync::RwLock::new(ServerState {
-        config: config::load(),
+        config: loaded,
         local_api_base: None,
     }));
 
@@ -154,13 +188,22 @@ pub fn run() {
             set_mainline_base_url,
             regenerate_pairing_code,
             add_mount_directory,
+            set_ui_locale,
         ])
         .setup(
-            |app: &mut tauri::App| -> Result<(), Box<dyn std::error::Error>> {
+            move |app: &mut tauri::App| -> Result<(), Box<dyn std::error::Error>> {
                 let handle = app.handle().clone();
-                let show = MenuItem::with_id(&handle, "show", "显示窗口", true, None::<&str>)?;
-                let quit = MenuItem::with_id(&handle, "quit", "退出", true, None::<&str>)?;
-                let menu = Menu::with_items(&handle, &[&show, &quit])?;
+                let (t_show, t_check, t_quit) = tray_labels::labels_for(&initial_tray_locale);
+                let show = MenuItem::with_id(&handle, "show", t_show, true, None::<&str>)?;
+                let check_updates =
+                    MenuItem::with_id(&handle, "check-updates", t_check, true, None::<&str>)?;
+                let quit = MenuItem::with_id(&handle, "quit", t_quit, true, None::<&str>)?;
+                app.manage(TrayMenuItems {
+                    show: show.clone(),
+                    check_updates: check_updates.clone(),
+                    quit: quit.clone(),
+                });
+                let menu = Menu::with_items(&handle, &[&show, &check_updates, &quit])?;
                 let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
                 let _tray = TrayIconBuilder::with_id("main-tray")
                     .menu(&menu)
@@ -175,6 +218,13 @@ pub fn run() {
                                 let _ = w.show();
                                 let _ = w.set_focus();
                             }
+                        }
+                        "check-updates" => {
+                            if let Some(w) = app.get_webview_window("main") {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                            let _ = app.emit("connector-check-updates", ());
                         }
                         _ => {}
                     })

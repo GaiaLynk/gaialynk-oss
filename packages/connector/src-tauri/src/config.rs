@@ -22,6 +22,10 @@ pub fn normalize_mainline_base_url(raw: &str) -> String {
     s
 }
 
+fn default_ui_locale() -> String {
+    "en".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedConfig {
     pub mainline_base_url: String,
@@ -31,6 +35,9 @@ pub struct PersistedConfig {
     pub device_id: Option<String>,
     pub mounted_roots: Vec<String>,
     pub allowed_web_origins: Vec<String>,
+    /// 界面 / 托盘语言：`en` | `zh-Hans` | `zh-Hant`（与前端 `gaialynk.connector.locale` 对齐）
+    #[serde(default = "default_ui_locale")]
+    pub ui_locale: String,
 }
 
 impl Default for PersistedConfig {
@@ -50,6 +57,7 @@ impl Default for PersistedConfig {
                 "http://localhost:1420".to_string(),
                 "http://127.0.0.1:1420".to_string(),
             ],
+            ui_locale: default_ui_locale(),
         }
     }
 }
@@ -76,6 +84,18 @@ pub fn load() -> PersistedConfig {
     let c = PersistedConfig::default();
     let _ = save(&c);
     c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deserializes_legacy_config_without_ui_locale() {
+        let json = r#"{"mainline_base_url":"http://x","pairing_code":"123456","device_token":null,"device_secret":null,"device_id":null,"mounted_roots":[],"allowed_web_origins":[]}"#;
+        let c: PersistedConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(c.ui_locale, "en");
+    }
 }
 
 pub fn save(c: &PersistedConfig) -> anyhow::Result<()> {

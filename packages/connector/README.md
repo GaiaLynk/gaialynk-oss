@@ -40,6 +40,12 @@ npx tauri icon src-tauri/icons/1024x1024.png
 
 - 支持 **English**、**简体中文**、**繁體中文**（与官网 `en` / `zh-Hans` / `zh-Hant` 一致）。
 - 首次启动按 **系统/浏览器语言** 推断；在窗口右上角 **语言** 下拉切换，选择写入 **localStorage**（`gaialynk.connector.locale`），下次打开沿用。
+- 启动与切换语言时会同步 **托盘菜单** 文案，并把当前语言写入 `config.json` 的 **`ui_locale`**（与上述三语一致：`en` / `zh-Hans` / `zh-Hant`）。托盘文案与 `src-tauri/src/tray_labels.rs` 对应；若改界面文案请同步改该文件。
+
+## 应用内更新（Tauri updater）
+
+- 启动时会静默请求 `tauri.conf.json` 里 `plugins.updater.endpoints`（默认 `gaialynk-oss` 的 `latest.json`）。**失败时不再完全静默**：会在开发者工具控制台输出 `[GaiaLynk Connector updater]` 日志；主窗口提供 **「检查更新」** 按钮，托盘菜单提供 **「检查更新」**，便于查看具体错误（网络、签名等）。
+- 若需人工核对：在浏览器打开与 endpoints 一致的 `latest.json` URL，确认能下载且 JSON 合法。
 
 ## 命令错误（多语言）
 
