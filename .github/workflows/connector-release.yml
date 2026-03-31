@@ -10,6 +10,8 @@
 #
 # macOS：aarch64 与 x86_64 分两个 job，x86_64 needs aarch64，同一时刻只占用 1 个 macOS Runner。
 # Windows 与 publish-macos-aarch64 并行。
+# 并行 job 若各自让 tauri-action「创建 Release」，会竞态（同一 tag 重复 create → 422 / 步骤失败）。
+# 故增加 ensure-github-release：先串行占位创建 Release，再并行构建上传资产。
 # macOS 公证：等待时间主要取决于 Apple 侧队列/API，与 .app 体积几乎无关（notarytool 提交后轮询直至终态）。
 # 已知情况：Notary 服务曾出现大面积「长时间 In Progress」、论坛有 90min+ 案例（tauri#14579、electron/notarize#179）；非「包太大上传慢」。
 # 若 job 在「Notarizing …」卡到 timeout：先查日志是否出现 NSURLError / HTTP 401；可错峰 Re-run；紧急可用 tauri build --skip-stapling（不等待公证完成即结束，产物可能尚未可分发，慎用）。
@@ -31,7 +33,51 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ensure-github-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create GitHub Release if missing (avoid parallel tauri-action race)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace("refs/tags/", "");
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            try {
+              await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              core.info(`Release for tag ${tag} already exists.`);
+              return;
+            } catch (e) {
+              if (e.status !== 404) throw e;
+            }
+            const placeholder = [
+              "桌面 Connector 构建（E-21）。各平台产物由并行 job 上传；正文可能随后续 job 更新。",
+              "",
+              "- **Windows**：未签名安装包可能出现 SmartScreen 提示。",
+              "- **macOS**：视 Secrets 配置可能为已签名/公证或未签名构建。",
+              "- **自动更新**：`latest.json` 与安装包见本 Release Assets。",
+            ].join("\n");
+            try {
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                name: `GaiaLynk Connector ${tag}`,
+                body: placeholder,
+                prerelease: false,
+              });
+              core.info(`Created release for ${tag}.`);
+            } catch (e) {
+              if (e.status === 422) {
+                core.info("Release already exists (422), another job won the race; OK.");
+                return;
+              }
+              throw e;
+            }
+
   publish-windows:
+    needs: ensure-github-release
     runs-on: windows-latest
     timeout-minutes: 180
     steps:
@@ -102,6 +148,7 @@ jobs:
           args: ""
 
   publish-macos-aarch64:
+    needs: ensure-github-release
     runs-on: macos-latest
     timeout-minutes: 360
     steps:
@@ -187,7 +234,7 @@ jobs:
           args: "--verbose --target aarch64-apple-darwin"
 
   publish-macos-x86_64:
-    needs: publish-macos-aarch64
+    needs: [ensure-github-release, publish-macos-aarch64]
     runs-on: macos-latest
     timeout-minutes: 360
     steps:
