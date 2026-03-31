@@ -113,7 +113,10 @@ base64 < /path/to/your/updater.key | tr -d '\n'
 
 ```bash
 cd packages/connector && npm run tauri -- signer generate -w ~/.tauri/gaialynk-connector.key
-# 将 .key 按上面 base64 一行写入 TAURI_SIGNING_PRIVATE_KEY；把 .pub 内容更新进 tauri.conf.json 的 updater.pubkey
+# 私钥：openssl base64 -A -in xxx.key → 整行写入 TAURI_SIGNING_PRIVATE_KEY
+# 公钥：tauri.conf.json 的 plugins.updater.pubkey 须为「整份 .pub 文件」的 Base64 单行（与私钥同对），例如：
+#   openssl base64 -A -in ~/.tauri/gaialynk-connector.key.pub
+# 勿只填 .pub 里第二行的 RWS…（仅该行再当 Base64 解码会得到非 UTF-8，CI 报 invalid utf-8 sequence）
 ```
 
 生成示例：
@@ -134,7 +137,8 @@ node packages/connector/scripts/generate-updater-manifest.mjs \
 - **`failed to decode base64 secret key` / `Invalid symbol 61`**（`61` = `=`）：多为把 **minisign 多行明文**当 Secret，或 Base64 **含换行**。须用 **私钥文件 → Base64 → 删净换行** 的一整行写入 `TAURI_SIGNING_PRIVATE_KEY`。按上文 **「TAURI_SIGNING_PRIVATE_KEY 在 GitHub Actions 里的正确格式」** 重设后 **Re-run**。
 - **`Invalid symbol 37`**（`37` = **`%`**）：Secret 里出现了 **URL 编码**或其它非法字符。常见是把 Base64 从浏览器地址栏、某工具里复制成了带 **`%3D`**（等号）等形式。请只用终端输出的 **纯 Base64**（仅 `A–Za–z0–9+/=`），**不要** URL 编码；在 GitHub Secret 编辑框里**不要**加引号、不要首尾空格。终端末尾单独一列 **`%`**（zsh 在「输出无换行」时的提示）**不是** Base64 的一部分，**切勿**粘进 Secret。
 - **`incorrect updater private key password: Device not configured (os error 6)`**（本地脚本、CI 非交互环境常见）：多为**无密码密钥**却**未设置**环境变量 **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`**（「未设置」与「设为空字符串」在 Tauri 里行为不同——未设置会走交互读终端）。处理：**`export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""`** 后再构建；CI 侧使用本仓库 **connector-release** 工作流里 **`Export TAURI_SIGNING_PRIVATE_KEY_PASSWORD`** 一步，或自行等价写入 `GITHUB_ENV`。
-- **`incorrect updater private key password: Missing encoded key in secret key`** / **`Missing comment in secret key`**：① **最常见**：`TAURI_SIGNING_PRIVATE_KEY` 在 CI 里实际为**空**（密钥只配在 **Environment secrets** 而未在 job 上使用 `environment:`，或未配 **Repository secret**）——见上文 **「务必使用仓库级 Secret」**。② 其次：密码与密钥不匹配、粘错 `.pub`、Base64 截断/多字符等。处理顺序：在 **Repository secrets** 中重设 `TAURI_SIGNING_PRIVATE_KEY`；无密码时删掉错误的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 并依赖 workflow 中的空密码导出；仍失败再考虑重新生成密钥对并更新 `tauri.conf.json` 的 `pubkey`。
+- **`incorrect updater private key password: Missing encoded key in secret key`** / **`Missing comment in secret key`**：① **最常见**：`TAURI_SIGNING_PRIVATE_KEY` 在 CI 里实际为**空**（密钥只配在 **Environment secrets** 而未在 job 上使用 `environment:`，或未配 **Repository secret**）——见上文 **「务必使用仓库级 Secret」**。② 其次：密码与密钥不匹配、粘错 `.pub`、Base64 截断/多字符等。处理顺序：在 **Repository secrets** 中重设 `TAURI_SIGNING_PRIVATE_KEY`；无密码时删掉错误的 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 并依赖 workflow 中的 **显式空字符串** 密码导出；仍失败再考虑重新生成密钥对并更新 `tauri.conf.json` 的 `pubkey`。
+- **`failed to decode pubkey` / `invalid utf-8 sequence`（Base64 pubkey）**：`plugins.updater.pubkey` 填错了。Tauri 会把该字段当作 **Base64** 解码，且解码后的字节须为 **UTF-8**（即整份 minisign `.pub` 明文）。请改为 `openssl base64 -A -in your.key.pub` 的**整行输出**，不要只填公钥第二行的 `RWS…` 字符串。
 
 ## 分仓部署验证（公仓 `gaialynk-oss`）
 

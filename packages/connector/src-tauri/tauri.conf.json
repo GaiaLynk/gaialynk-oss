@@ -27,7 +27,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "RWSkM2eaOLtgcFdWvf+xePfr7m+m22yTdvtTU8kj98+cnzTdVQUb/4Ka",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcwNjBCQjM4OUE2NzMzQTQKUldTa00yZWFPTHRnY0ZkV3ZmK3hlUGZyN20rbTIyeVRkdnRUVThrajk4K2NuelRkVlFVYi80S2EK",
       "endpoints": [
         "https://github.com/GaiaLynk/gaialynk-oss/releases/latest/download/latest.json"
       ]
