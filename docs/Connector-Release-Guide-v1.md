@@ -60,9 +60,16 @@ git push origin connector-v0.2.0
 
 Tauri 会将 `productName`「GaiaLynk Connector」中的空格变为 **`.`**，故文件名形如 **`GaiaLynk.Connector_<version>_<arch>.dmg`**，Windows 常见还有 **`_x64_en-US.msi`**、**`-setup.exe`**。**勿**使用文档里偶见的 `GaiaLynk-Connector_…` 写法（连字符），否则 404。
 
-### 官网 / 应用内下载按钮（默认与 `latest.json` 自动对齐）
+### 官网 / 应用内下载按钮（`latest.json` 取版本，直链用安装包）
 
-营销站下载页、首页 Connector 板块、**设置 → 连接器** 在 **未同时设置** `DESKTOP_CONNECTOR_DOWNLOAD_URL_MAC` **与** `DESKTOP_CONNECTOR_DOWNLOAD_URL_WIN` 时，会在服务端请求 **`…/releases/latest/download/latest.json`**，读取 `platforms.darwin-aarch64.url` 与 `platforms.windows-x86_64.url`（与 Tauri updater 同源）。**在 `gaialynk-oss` 发新版并上传 manifest 后，一般无需再改 Vercel/Railway 下载变量**；ISR 约 5 分钟内会拿到新直链。
+营销站下载页、首页 Connector 板块、**设置 → 连接器** 在 **未同时设置** `DESKTOP_CONNECTOR_DOWNLOAD_URL_MAC` **与** `DESKTOP_CONNECTOR_DOWNLOAD_URL_WIN` 时，会在服务端请求 **`…/releases/latest/download/latest.json`**，读取其中的 **`version`**，再按约定拼 **首次安装** 直链：
+
+- **Mac（Apple Silicon）**：`…/download/connector-v{version}/GaiaLynk.Connector_{version}_aarch64.dmg`
+- **Windows**：`…/download/connector-v{version}/GaiaLynk.Connector_{version}_x64_en-US.msi`（官网服务端会对 MSI 做 **HEAD**；若不存在则回退同目录 **`…_x64-setup.exe`**。若 `latest.json` 里 Windows 指向 **`.zip` 等 updater 包**，仍按 `version` 拼上述安装包名。）
+
+**不会**直接使用 `platforms.*.url` 作为官网按钮链接——该字段在 Tauri updater 中多为 **`.app.tar.gz` 等更新包**，不适合给浏览器用户当「下载安装」入口。清单里的 **版本号**与 **GitHub Release tag `connector-v*`** 对齐即可；ISR 约 5 分钟内会跟新版。
+
+若 **`NEXT_PUBLIC_DESKTOP_CONNECTOR_RELEASES_URL`** 不是 `github.com/{owner}/{repo}/releases` 形式，官网会尝试从 `platforms` 里 **GitHub** asset URL 解析 `owner/repo/tag` 再拼 **`.dmg` / `.msi`**；仍无法解析时回退为 manifest 原始 `url`。
 
 可选：**`DESKTOP_CONNECTOR_LATEST_JSON_URL`** 覆盖清单地址；**`NEXT_PUBLIC_DESKTOP_CONNECTOR_RELEASES_URL`** 覆盖 Releases 根（并用于推导默认清单 URL 与 Release notes 链接）。
 

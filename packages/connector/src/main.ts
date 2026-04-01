@@ -120,6 +120,18 @@ async function registerTrayUpdateListener(): Promise<void> {
   }
 }
 
+/** 配对完成或主网判定设备已解绑时由 Rust 侧 emit，刷新「已连接 / 等待配对」等状态。 */
+async function registerPairingStateListener(): Promise<void> {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    await listen("connector-pairing-state", () => {
+      void render();
+    });
+  } catch {
+    /* 浏览器 dev 无 Tauri */
+  }
+}
+
 /** 托盘菜单文案与界面语言对齐，并写入本地 config.json（`ui_locale`）。 */
 async function syncTrayLocale(locale: Locale): Promise<void> {
   try {
@@ -315,6 +327,7 @@ document.head.appendChild(style);
 async function bootstrap(): Promise<void> {
   applyChromeLocale(activeLocale);
   await registerTrayUpdateListener();
+  await registerPairingStateListener();
   await syncTrayLocale(activeLocale);
   void runUpdateCheck(false);
   await render();

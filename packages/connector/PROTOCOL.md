@@ -42,6 +42,19 @@ GET /api/v1/connectors/desktop/pair-status?pairing_code={6位数字}
 
 > Web 侧 `POST /api/v1/connectors/desktop/pair` 由 **E-20** 定义；Connector 仅需轮询 `pair-status`。
 
+### 1.1 设备会话校验（可选，建议实现）
+
+用于在本地仍持有 `device_token` 时周期性确认设备未被 Web 解绑；若已解绑，主线返回 **401/403**，客户端应清除本地 `device_token` / `device_secret` / `device_id` 并恢复配对轮询。
+
+**请求**
+
+```http
+GET /api/v1/connectors/desktop/device/session
+Authorization: Bearer {device_token}
+```
+
+**响应**：`200` 且 `data.active === true` 表示设备仍为 `active`；**403** `device_revoked` 表示已解绑或设备非激活。
+
 ## 2. 本机 HTTP（127.0.0.1 随机端口）
 
 仅绑定 **回环地址**。所有 `/fs/*` 路由：

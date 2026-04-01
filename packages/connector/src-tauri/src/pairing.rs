@@ -42,6 +42,27 @@ pub async fn fetch_pair_status(
     parse_pair_status_json(v)
 }
 
+/// 校验 `device_token` 对应设备是否仍为 active（Web 解绑后会 403）。
+pub async fn fetch_device_session_active(
+    client: &reqwest::Client,
+    mainline_base: &str,
+    device_token: &str,
+) -> anyhow::Result<bool> {
+    let base = mainline_base.trim_end_matches('/');
+    let url = format!("{base}/api/v1/connectors/desktop/device/session");
+    let res = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {device_token}"))
+        .send()
+        .await?;
+    let status = res.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return Ok(false);
+    }
+    res.error_for_status()?;
+    Ok(true)
+}
+
 #[derive(Debug, Serialize, Clone)]
 struct ReceiptSignEnvelope {
     pub action: String,

@@ -46,6 +46,8 @@ npx tauri icon src-tauri/icons/1024x1024.png
 
 - 启动时会静默请求 `tauri.conf.json` 里 `plugins.updater.endpoints`（默认 `gaialynk-oss` 的 `latest.json`）。**失败时不再完全静默**：会在开发者工具控制台输出 `[GaiaLynk Connector updater]` 日志；主窗口提供 **「检查更新」** 按钮，托盘菜单提供 **「检查更新」**，便于查看具体错误（网络、签名等）。
 - 若需人工核对：在浏览器打开与 endpoints 一致的 `latest.json` URL，确认能下载且 JSON 合法。
+- **排障时如何把日志给别人**：① **弹窗全文**（或截图）复制错误第一行，例如 `Command plugin:updater|check not allowed by ACL`；② **开发者工具**：右键窗口 → 检查元素 / Inspect → **Console**，筛选 `[GaiaLynk Connector updater]`，把相关几行 **复制为文字** 粘贴到 issue/聊天；③ **版本**：窗口内或关于里看 **0.x.y**，并说明 **macOS / Windows** 与是否 **从官网 DMG/MSI 安装**。无需上传整份系统日志，除非对方明确要求。
+- **常见错误 `plugin:updater|check not allowed by ACL`**：前端调用了 `check()`，但 **capabilities** 未授予 **updater**。本仓库在 `capabilities/desktop.json` 中配置了 **`updater:default`**，且 **`tauri.conf.json` → `app.security.capabilities`** 须包含 **`desktop-capability`**（与 **`default`** 并列）。若自行改过 capabilities，请对照提交。
 
 ## 命令错误（多语言）
 

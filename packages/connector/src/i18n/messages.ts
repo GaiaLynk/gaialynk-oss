@@ -46,7 +46,7 @@ const en: Messages = {
   langOptionZhHant: "繁體中文",
   title: "GaiaLynk Desktop Connector",
   sectionConnection: "Connection",
-  statusConnected: "Connected to mainline",
+  statusConnected: "Paired with your account",
   statusWaiting: "Waiting for pairing",
   hintPairingStuckHtml:
     "If you already submitted the code in the web app but stay here, set <strong>mainline API base URL</strong> below (production is usually <code>https://api.gaialynk.com</code>), not the marketing homepage.",
@@ -101,7 +101,7 @@ const zhHans: Messages = {
   langOptionZhHant: "繁體中文",
   title: "GaiaLynk 桌面 Connector",
   sectionConnection: "连接状态",
-  statusConnected: "已连接主网",
+  statusConnected: "已与账号配对",
   statusWaiting: "等待配对",
   hintPairingStuckHtml:
     "若在 Web 已提交配对码仍停在本页，请确认下方主网为<strong> API 根地址</strong>（生产一般为 <code>https://api.gaialynk.com</code>），勿填官网首页。",
@@ -153,7 +153,7 @@ const zhHant: Messages = {
   langOptionZhHant: "繁體中文",
   title: "GaiaLynk 桌面 Connector",
   sectionConnection: "連線狀態",
-  statusConnected: "已連線至主線",
+  statusConnected: "已與帳號配對",
   statusWaiting: "等待配對",
   hintPairingStuckHtml:
     "若已在 Web 送出配對碼仍停在本頁，請確認下方主網為<strong> API 根網址</strong>（生產一般為 <code>https://api.gaialynk.com</code>），勿填官網首頁。",

@@ -13,6 +13,9 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::Emitter;
 use tauri::Manager;
+use tauri::AppHandle;
+
+const DEVICE_SESSION_CHECK_SECS: u64 = 30;
 
 #[derive(Clone)]
 struct TrayMenuItems {
@@ -121,21 +124,48 @@ async fn add_mount_directory(
     config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))
 }
 
-async fn pairing_poll_loop(shared: SharedState) {
+async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
     let client = reqwest::Client::new();
     loop {
-        tokio::time::sleep(Duration::from_secs(2)).await;
-        let (code, base, has_token) = {
+        let token_snapshot = {
             let st = shared.read().await;
-            (
-                st.config.pairing_code.clone(),
-                st.config.mainline_base_url.clone(),
-                st.config.device_token.is_some(),
-            )
+            st.config.device_token.clone()
         };
-        if has_token {
+
+        if let Some(token) = token_snapshot {
+            tokio::time::sleep(Duration::from_secs(DEVICE_SESSION_CHECK_SECS)).await;
+            let base = {
+                let st = shared.read().await;
+                st.config.mainline_base_url.clone()
+            };
+            match pairing::fetch_device_session_active(&client, &base, &token).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    let cleared = {
+                        let mut st = shared.write().await;
+                        if st.config.device_token.as_ref() == Some(&token) {
+                            st.config.device_token = None;
+                            st.config.device_secret = None;
+                            st.config.device_id = None;
+                            config::save(&st.config).is_ok()
+                        } else {
+                            false
+                        }
+                    };
+                    if cleared {
+                        let _ = app.emit("connector-pairing-state", false);
+                    }
+                }
+                Err(_) => { /* 网络故障：保留 token，下次再试 */ }
+            }
             continue;
         }
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let (code, base) = {
+            let st = shared.read().await;
+            (st.config.pairing_code.clone(), st.config.mainline_base_url.clone())
+        };
         let Ok(body) = pairing::fetch_pair_status(&client, &base, &code).await else {
             continue;
         };
@@ -155,7 +185,9 @@ async fn pairing_poll_loop(shared: SharedState) {
         st.config.device_token = Some(t);
         st.config.device_secret = Some(s);
         st.config.device_id = Some(id);
-        let _ = config::save(&st.config);
+        if config::save(&st.config).is_ok() {
+            let _ = app.emit("connector-pairing-state", true);
+        }
     }
 }
 
@@ -173,11 +205,6 @@ pub fn run() {
         local_server::run_server(s_srv).await;
     });
 
-    let s_poll = shared.clone();
-    tauri::async_runtime::spawn(async move {
-        pairing_poll_loop(s_poll).await;
-    });
-
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
@@ -192,6 +219,12 @@ pub fn run() {
         ])
         .setup(
             move |app: &mut tauri::App| -> Result<(), Box<dyn std::error::Error>> {
+                let poll_h = app.handle().clone();
+                let s_poll = shared.clone();
+                tauri::async_runtime::spawn(async move {
+                    pairing_poll_loop(s_poll, poll_h).await;
+                });
+
                 let handle = app.handle().clone();
                 let (t_show, t_check, t_quit) = tray_labels::labels_for(&initial_tray_locale);
                 let show = MenuItem::with_id(&handle, "show", t_show, true, None::<&str>)?;
