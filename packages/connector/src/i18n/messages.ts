@@ -30,6 +30,9 @@ export type Messages = {
   updateUpToDate: (currentVersion: string) => string;
   updateCheckFailed: (detail: string) => string;
   updateAvailable: (newVersion: string, currentVersion: string) => string;
+  updateDownloading: string;
+  updateDownloadProgress: (downloaded: number, total: number) => string;
+  updateInstalling: string;
   errMountLimit: string;
   errCommandConfigSave: (detail: string) => string;
   errCommandDialog: (detail: string) => string;
@@ -81,6 +84,12 @@ const en: Messages = {
     ].join("\n"),
   updateAvailable: (newVersion, currentVersion) =>
     `Update available ${newVersion} (current ${currentVersion}). Download and install now?`,
+  updateDownloading: "Downloading update…",
+  updateDownloadProgress: (downloaded, total) =>
+    total > 0
+      ? `Downloading update… ${Math.min(100, Math.round((downloaded / total) * 100))}%`
+      : "Downloading update…",
+  updateInstalling: "Installing update; the app will restart…",
   errMountLimit: "You can mount at most 5 workspace folders.",
   errCommandConfigSave: (detail) =>
     detail ? `Could not save settings: ${detail}` : "Could not save settings.",
@@ -134,6 +143,12 @@ const zhHans: Messages = {
     ].join("\n"),
   updateAvailable: (newVersion, currentVersion) =>
     `发现新版本 ${newVersion}（当前 ${currentVersion}），是否下载并安装？`,
+  updateDownloading: "正在下载更新…",
+  updateDownloadProgress: (downloaded, total) =>
+    total > 0
+      ? `正在下载更新… ${Math.min(100, Math.round((downloaded / total) * 100))}%`
+      : "正在下载更新…",
+  updateInstalling: "正在安装更新，应用将自动重启…",
   errMountLimit: "最多只能挂载 5 个工作区根目录。",
   errCommandConfigSave: (detail) =>
     detail ? `无法保存设置：${detail}` : "无法保存设置。",
@@ -186,6 +201,12 @@ const zhHant: Messages = {
     ].join("\n"),
   updateAvailable: (newVersion, currentVersion) =>
     `發現新版本 ${newVersion}（目前 ${currentVersion}），是否下載並安裝？`,
+  updateDownloading: "正在下載更新…",
+  updateDownloadProgress: (downloaded, total) =>
+    total > 0
+      ? `正在下載更新… ${Math.min(100, Math.round((downloaded / total) * 100))}%`
+      : "正在下載更新…",
+  updateInstalling: "正在安裝更新，應用程式將自動重新啟動…",
   errMountLimit: "最多只能掛載 5 個工作區根目錄。",
   errCommandConfigSave: (detail) =>
     detail ? `無法儲存設定：${detail}` : "無法儲存設定。",

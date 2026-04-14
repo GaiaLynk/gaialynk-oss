@@ -85,10 +85,54 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
     }
     const msg = m.updateAvailable(update.version, update.currentVersion);
     const ok = window.confirm(msg);
-    if (ok) {
-      await update.downloadAndInstall();
+    if (!ok) {
+      await update.close();
+      return;
     }
-    await update.close();
+    if (userInitiated) {
+      setUpdateCheckFeedback(m.updateDownloading, "pending");
+      btn()?.toggleAttribute("disabled", true);
+    }
+    let downloaded = 0;
+    let contentLength = 0;
+    try {
+      await update.downloadAndInstall((event) => {
+        const ev = event as {
+          event: string;
+          data: { contentLength?: number; chunkLength?: number };
+        };
+        switch (ev.event) {
+          case "Started":
+            contentLength = ev.data.contentLength ?? 0;
+            break;
+          case "Progress":
+            downloaded += ev.data.chunkLength ?? 0;
+            if (userInitiated && contentLength > 0) {
+              setUpdateCheckFeedback(m.updateDownloadProgress(downloaded, contentLength), "pending");
+            }
+            break;
+          case "Finished":
+            if (userInitiated) {
+              setUpdateCheckFeedback(m.updateInstalling, "pending");
+            }
+            break;
+          default:
+            break;
+        }
+      });
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch (installErr) {
+      const detail = installErr instanceof Error ? installErr.message : String(installErr);
+      console.error(UPDATER_LOG, "download/install/relaunch failed:", detail, installErr);
+      if (userInitiated) {
+        clearUpdateCheckFeedback();
+        btn()?.toggleAttribute("disabled", false);
+        window.alert(m.updateCheckFailed(detail));
+      }
+    } finally {
+      await update.close().catch(() => {});
+    }
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     console.error(UPDATER_LOG, "check() failed:", detail, e);
