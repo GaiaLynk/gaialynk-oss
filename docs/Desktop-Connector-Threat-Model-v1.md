@@ -1,7 +1,7 @@
 # 桌面 Connector 威胁模型 v1（E-19）
 
-> **范围**：轻量桌面 Connector（Tauri 本机进程 + 回环 HTTP + 主网配对/收据）。  
-> **相关**：`packages/connector/`、`packages/connector/PROTOCOL.md`、主线 **E-20**（配对 API、收据验签、执行代理）。
+> **范围**：轻量桌面 Connector（Tauri 本机进程 + 回环 HTTP + 主网配对/凭证）。  
+> **相关**：`packages/connector/`、`packages/connector/PROTOCOL.md`、主线 **E-20**（配对 API、凭证验签、执行代理）。
 
 ## 1. 资产与信任边界
 
@@ -15,7 +15,7 @@
 
 - **浏览器 / Web App**：经 `Origin` + Bearer 调用本机回环 API；须防止恶意站点在用户已登录 Web 的前提下滥用 token（见 §3）。
 - **本机其他进程**：可扫描回环端口并尝试调用；依赖 Bearer 与可选 Origin 降低误用面（见 §2、§3）。
-- **主网**：校验收据 HMAC、设备状态与审计（E-20）。
+- **主网**：校验凭证 HMAC、设备状态与审计（E-20）。
 
 ## 2. 本机恶意软件滥用
 
@@ -71,7 +71,7 @@
 
 - Windows 路径大小写/前缀形式差异需在 E-20 联调中回归；必要时引入规范化库（SCALE-DEBT）。
 
-## 6. 收据伪造与重放
+## 6. 凭证伪造与重放
 
 **风险**：攻击者伪造 `POST .../receipts` 负载。
 

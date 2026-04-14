@@ -34,6 +34,9 @@ pub struct PersistedConfig {
     pub device_secret: Option<String>,
     pub device_id: Option<String>,
     pub mounted_roots: Vec<String>,
+    /// 与主线 `primary_mounted_root_index` 对齐，经 `device/mounts` 同步
+    #[serde(default)]
+    pub primary_mounted_root_index: u32,
     pub allowed_web_origins: Vec<String>,
     /// 界面 / 托盘语言：`en` | `zh-Hans` | `zh-Hant`（与前端 `gaialynk.connector.locale` 对齐）
     #[serde(default = "default_ui_locale")]
@@ -51,6 +54,7 @@ impl Default for PersistedConfig {
             device_secret: None,
             device_id: None,
             mounted_roots: Vec::new(),
+            primary_mounted_root_index: 0,
             allowed_web_origins: vec![
                 "http://localhost:3000".to_string(),
                 "http://127.0.0.1:3000".to_string(),

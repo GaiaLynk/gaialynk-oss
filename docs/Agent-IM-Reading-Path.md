@@ -47,7 +47,7 @@
 ## D. 架构与治理（按需阅读）
 
 10. [CTO 技术栈与基础设施长期规划](./Agent-IM-CTO-Tech-Stack-and-Infrastructure.md)
-11. [ADR-0001: 收据签名升级到 Ed25519/JWS](./ADR-0001-Receipt-Signing-Upgrade-Ed25519-JWS.md)
+11. [ADR-0001: 凭证签名升级到 Ed25519/JWS](./ADR-0001-Receipt-Signing-Upgrade-Ed25519-JWS.md)
 12. [ADR-0002: 审计 Append-Only 与查询增强](./ADR-0002-Audit-Append-Only-and-Query-Enhancement.md)
 
 ---

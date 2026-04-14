@@ -44,7 +44,7 @@ GET /api/v1/connectors/desktop/pair-status?pairing_code={6位数字}
 
 ### 1.1 设备会话校验（可选，建议实现）
 
-用于在本地仍持有 `device_token` 时周期性确认设备未被 Web 解绑；若已解绑，主线返回 **401/403**，客户端应清除本地 `device_token` / `device_secret` / `device_id` 并恢复配对轮询。
+用于在本地仍持有 `device_token` 时周期性确认设备未被 Web 解绑；若已解绑，主线返回 **401/403**，客户端应清除本地 `device_token` / `device_secret` / `device_id` 并恢复配对轮询。**200成功时**主线会更新该设备的 `last_seen_at`，供 Web 端「在线 / 离线」展示与配对完成后的本机轮询间隔对齐。
 
 **请求**
 
@@ -93,7 +93,7 @@ Authorization: Bearer {device_token}
 **SSE**（`text/event-stream`），`event: fs`，`data` 为 notify 事件的 JSON 字符串。  
 TRUST-DEBT：每个连接会常驻一条 watcher 线程；生产应限流与连接生命周期治理。
 
-## 3. 执行收据上送
+## 3. 执行凭证上送
 
 每次 **list / read / write** 成功后，Connector **异步**调用（失败仅日志，不阻塞本机 API）：
 
@@ -118,6 +118,26 @@ Content-Type: application/json
 **签名体**：与请求 body 结构相同，但 **不含** `env_signature`，且为 `ReceiptSignEnvelope` 的 `serde_json::to_string` 结果（字段顺序固定为 `action`, `device_id`, `error_code`, `path_hash`, `status`, `ts`；`error_code` 缺省时序列化省略）。
 
 实现参考：`packages/connector/src-tauri/src/pairing.rs` 中 `ReceiptSignEnvelope` 与 `build_signed_receipt`。
+
+## 3.1 WebSocket `desktop_execute`（主线下行）
+
+Connector 在 **`GET /api/v1/connectors/desktop/ws?device_token=`** 上收到的 JSON 文本帧，类型为 **`desktop_execute`** 时字段包括：
+
+| 字段 | 说明 |
+|------|------|
+| `type` | 固定 `desktop_execute` |
+| `request_id` | 与 `POST .../execute` 响应一致 |
+| `device_id` | UUID |
+| `action` | `file_list` \| `file_read` \| `file_write` |
+| `path` | 相对挂载根路径（与 §2 本机 API 一致） |
+| `root_index` | **可选**，默认 `0`；与 `POST .../device/mounts` 同步的 `mounted_roots` 下标一致，本机 `/fs/*` 仅解析该根 |
+| `content_base64` | **可选**，仅当 `action=file_write` 且主线请求携带写入正文时出现；标准 base64（UTF-8 字节） |
+
+Connector 应在实现 WS 客户端后，对 `file_write` 调用本机 **`POST /fs/write`**（`path` + `content_base64` + `root_index`），再 **`POST .../execute-result`** 回传结果。详见 `docs/internal/cto-desktop-agent-write-roadmap.md`。
+
+## 3.2 `POST /api/v1/connectors/desktop/device/mounts`（device JWT）
+
+配对完成后由 Connector 将本机 **`mounted_roots`**（最多 5 条路径字符串）与 **`primary_mounted_root_index`**（0–4）同步到主线；请求体 JSON：`{ "mounted_roots": string[], "primary_mounted_root_index": number }`。需 **`Authorization: Bearer <device_token>`**。
 
 ## 4. 环境变量
 

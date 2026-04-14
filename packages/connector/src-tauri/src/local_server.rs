@@ -31,6 +31,8 @@ pub struct ServerState {
 #[derive(Deserialize)]
 pub struct PathQuery {
     pub path: Option<String>,
+    #[serde(default)]
+    pub root_index: u32,
 }
 
 #[derive(Deserialize)]
@@ -38,6 +40,8 @@ pub struct WriteBody {
     pub path: String,
     #[serde(default)]
     pub content_base64: String,
+    #[serde(default)]
+    pub root_index: u32,
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<String> {
@@ -132,7 +136,8 @@ async fn fs_list(
         check_origin_and_token(&headers, &st.config)?;
         mounted_paths(&st.config)
     };
-    let p = fs_ops::resolve_within_roots(&roots, &path_str).map_err(|_| StatusCode::FORBIDDEN)?;
+    let p = fs_ops::resolve_within_roots_at_index(&roots, q.root_index as usize, &path_str)
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     let entries = fs_ops::list_dir(&p).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     schedule_receipt(shared.clone(), "file_list", &p, "ok", None);
     Ok(Json(entries))
@@ -149,7 +154,8 @@ async fn fs_read(
         check_origin_and_token(&headers, &st.config)?;
         mounted_paths(&st.config)
     };
-    let p = fs_ops::resolve_within_roots(&roots, &path_str).map_err(|_| StatusCode::FORBIDDEN)?;
+    let p = fs_ops::resolve_within_roots_at_index(&roots, q.root_index as usize, &path_str)
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     let bytes = fs_ops::read_file_bounded(&p).map_err(|e| match e {
         fs_ops::FsError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
@@ -171,7 +177,8 @@ async fn fs_write(
         check_origin_and_token(&headers, &st.config)?;
         mounted_paths(&st.config)
     };
-    let p = fs_ops::resolve_within_roots(&roots, &body.path).map_err(|_| StatusCode::FORBIDDEN)?;
+    let p = fs_ops::resolve_within_roots_at_index(&roots, body.root_index as usize, &body.path)
+        .map_err(|_| StatusCode::FORBIDDEN)?;
     use base64::Engine;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(body.content_base64.as_bytes())
@@ -198,7 +205,8 @@ async fn fs_watch(
         mounted_paths(&st.config)
     };
     let watch_path =
-        fs_ops::resolve_within_roots(&roots, &path_str).map_err(|_| StatusCode::FORBIDDEN)?;
+        fs_ops::resolve_within_roots_at_index(&roots, q.root_index as usize, &path_str)
+            .map_err(|_| StatusCode::FORBIDDEN)?;
     if !watch_path.is_dir() {
         return Err(StatusCode::BAD_REQUEST);
     }

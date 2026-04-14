@@ -35,6 +35,8 @@ pub struct DirEntryJson {
 }
 
 /// 将用户传入的 `path` 解析到某一挂载根之下（`canonicalize` 后必须仍为根前缀）。
+/// 运行时代码优先使用 [`resolve_within_roots_at_index`]；本函数仍用于单元测试与多根探测。
+#[allow(dead_code)]
 pub fn resolve_within_roots(roots: &[PathBuf], user_path: &str) -> Result<PathBuf, FsError> {
     if roots.is_empty() {
         return Err(FsError::NoMounts);
@@ -55,6 +57,35 @@ pub fn resolve_within_roots(roots: &[PathBuf], user_path: &str) -> Result<PathBu
         }
     }
     Err(FsError::OutsideMounts)
+}
+
+/// 仅针对 `root_index` 指向的那一根挂载根解析（与主线 `desktop_execute.root_index` 对齐）。
+pub fn resolve_within_roots_at_index(
+    roots: &[PathBuf],
+    root_index: usize,
+    user_path: &str,
+) -> Result<PathBuf, FsError> {
+    if roots.is_empty() {
+        return Err(FsError::NoMounts);
+    }
+    let Some(root) = roots.get(root_index) else {
+        return Err(FsError::OutsideMounts);
+    };
+    let root_canon = root.canonicalize().map_err(|_| FsError::InvalidPath)?;
+    let trimmed = user_path.trim();
+    let candidate = if trimmed.is_empty() {
+        root_canon.clone()
+    } else if Path::new(trimmed).is_absolute() {
+        PathBuf::from(trimmed)
+    } else {
+        root_canon.join(trimmed.trim_start_matches(|c: char| c == '/' || c == '\\'))
+    };
+    let canon = candidate.canonicalize().map_err(|_| FsError::InvalidPath)?;
+    if is_same_or_child(&root_canon, &canon) {
+        Ok(canon)
+    } else {
+        Err(FsError::OutsideMounts)
+    }
 }
 
 fn is_same_or_child(root: &Path, child: &Path) -> bool {

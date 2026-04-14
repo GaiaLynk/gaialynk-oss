@@ -1,4 +1,4 @@
-//! 配对码生成、主网轮询与收据 HMAC（与 E-20 契约对齐，见 `packages/connector/PROTOCOL.md`）。
+//! 配对码生成、主网轮询与凭证 HMAC（与 E-20 契约对齐，见 `packages/connector/PROTOCOL.md`）。
 
 use hmac::{Hmac, Mac};
 use rand::Rng;
@@ -190,6 +190,29 @@ mod tests {
         assert_eq!(b.status, "pending");
         assert!(b.device_token.is_none());
     }
+}
+
+/// 将本机挂载根列表与 primary 下标同步到主线（device JWT）。
+pub async fn sync_device_mounts_to_mainline(
+    client: &reqwest::Client,
+    mainline_base: &str,
+    device_token: &str,
+    mounted_roots: &[String],
+    primary_mounted_root_index: u32,
+) -> anyhow::Result<()> {
+    let base = mainline_base.trim_end_matches('/');
+    let url = format!("{base}/api/v1/connectors/desktop/device/mounts");
+    let res = client
+        .post(url)
+        .header("Authorization", format!("Bearer {device_token}"))
+        .json(&serde_json::json!({
+            "mounted_roots": mounted_roots,
+            "primary_mounted_root_index": primary_mounted_root_index
+        }))
+        .send()
+        .await?;
+    res.error_for_status()?;
+    Ok(())
 }
 
 pub async fn post_receipt_fire_and_forget(

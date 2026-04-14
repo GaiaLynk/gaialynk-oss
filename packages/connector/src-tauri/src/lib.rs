@@ -2,6 +2,7 @@ mod command_error;
 mod config;
 mod fs_ops;
 mod local_server;
+mod mainline_ws;
 mod pairing;
 mod tray_labels;
 
@@ -16,6 +17,18 @@ use tauri::Manager;
 use tauri::AppHandle;
 
 const DEVICE_SESSION_CHECK_SECS: u64 = 30;
+
+fn spawn_mount_sync_if_linked(snap: config::PersistedConfig) {
+    if let Some(tok) = snap.device_token.clone() {
+        let client = reqwest::Client::new();
+        let base = snap.mainline_base_url.clone();
+        let roots = snap.mounted_roots.clone();
+        let pri = snap.primary_mounted_root_index;
+        tauri::async_runtime::spawn(async move {
+            let _ = pairing::sync_device_mounts_to_mainline(&client, &base, &tok, &roots, pri).await;
+        });
+    }
+}
 
 #[derive(Clone)]
 struct TrayMenuItems {
@@ -54,6 +67,7 @@ struct StatusPayload {
     mainline_base_url: String,
     local_api_base: Option<String>,
     mounted_roots: Vec<String>,
+    primary_mounted_root_index: u32,
     device_id: Option<String>,
 }
 
@@ -66,6 +80,7 @@ async fn get_status(state: tauri::State<'_, SharedState>) -> Result<StatusPayloa
         mainline_base_url: st.config.mainline_base_url.clone(),
         local_api_base: st.local_api_base.clone(),
         mounted_roots: st.config.mounted_roots.clone(),
+        primary_mounted_root_index: st.config.primary_mounted_root_index,
         device_id: st.config.device_id.clone(),
     })
 }
@@ -121,7 +136,11 @@ async fn add_mount_directory(
     if !st.config.mounted_roots.contains(&path) {
         st.config.mounted_roots.push(path);
     }
-    config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))
+    config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))?;
+    let snap = st.config.clone();
+    drop(st);
+    spawn_mount_sync_if_linked(snap);
+    Ok(())
 }
 
 async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
@@ -185,8 +204,12 @@ async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
         st.config.device_token = Some(t);
         st.config.device_secret = Some(s);
         st.config.device_id = Some(id);
-        if config::save(&st.config).is_ok() {
+        let save_ok = config::save(&st.config).is_ok();
+        let snap = st.config.clone();
+        drop(st);
+        if save_ok {
             let _ = app.emit("connector-pairing-state", true);
+            spawn_mount_sync_if_linked(snap);
         }
     }
 }
@@ -203,6 +226,11 @@ pub fn run() {
     let s_srv = shared.clone();
     tauri::async_runtime::spawn(async move {
         local_server::run_server(s_srv).await;
+    });
+
+    let s_ws = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        mainline_ws::mainline_ws_loop(s_ws).await;
     });
 
     tauri::Builder::default()
