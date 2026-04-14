@@ -40,6 +40,8 @@ export function formatParsedCommandError(m: Messages, p: ParsedCommandError): st
   switch (p.code) {
     case "MOUNT_LIMIT_REACHED":
       return m.errMountLimit;
+    case "MOUNT_INDEX_INVALID":
+      return m.errMountIndexInvalid;
     case "CONFIG_SAVE_FAILED":
       return m.errCommandConfigSave(p.detail ?? "");
     case "DIALOG_TASK_FAILED":

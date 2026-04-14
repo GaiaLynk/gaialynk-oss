@@ -25,6 +25,7 @@ export type Messages = {
   localApiStarting: string;
   sectionMounts: string;
   btnPickDirectory: string;
+  btnRemoveMount: string;
   btnCheckUpdates: string;
   updateChecking: string;
   updateUpToDate: (currentVersion: string) => string;
@@ -32,8 +33,10 @@ export type Messages = {
   updateAvailable: (newVersion: string, currentVersion: string) => string;
   updateDownloading: string;
   updateDownloadProgress: (downloaded: number, total: number) => string;
+  updateDownloadProgressUnknown: (downloadedBytes: number) => string;
   updateInstalling: string;
   errMountLimit: string;
+  errMountIndexInvalid: string;
   errCommandConfigSave: (detail: string) => string;
   errCommandDialog: (detail: string) => string;
   errCommandPathResolve: (detail: string) => string;
@@ -69,6 +72,7 @@ const en: Messages = {
   localApiStarting: "Starting…",
   sectionMounts: "Mounted workspaces (≤5)",
   btnPickDirectory: "Choose folder…",
+  btnRemoveMount: "Remove",
   btnCheckUpdates: "Check for updates",
   updateChecking: "Checking for updates…",
   updateUpToDate: (v) => `You're already on the latest version (${v}).`,
@@ -89,8 +93,11 @@ const en: Messages = {
     total > 0
       ? `Downloading update… ${Math.min(100, Math.round((downloaded / total) * 100))}%`
       : "Downloading update…",
+  updateDownloadProgressUnknown: (downloadedBytes) =>
+    `Downloading update… ${(downloadedBytes / 1048576).toFixed(1)} MiB received`,
   updateInstalling: "Installing update; the app will restart…",
   errMountLimit: "You can mount at most 5 workspace folders.",
+  errMountIndexInvalid: "That workspace is no longer in the list. Refresh and try again.",
   errCommandConfigSave: (detail) =>
     detail ? `Could not save settings: ${detail}` : "Could not save settings.",
   errCommandDialog: (detail) =>
@@ -128,6 +135,7 @@ const zhHans: Messages = {
   localApiStarting: "启动中…",
   sectionMounts: "已挂载工作区（≤5）",
   btnPickDirectory: "选择目录…",
+  btnRemoveMount: "移除",
   btnCheckUpdates: "检查更新",
   updateChecking: "正在检查更新…",
   updateUpToDate: (v) => `当前已是最新版本（${v}）。`,
@@ -148,8 +156,11 @@ const zhHans: Messages = {
     total > 0
       ? `正在下载更新… ${Math.min(100, Math.round((downloaded / total) * 100))}%`
       : "正在下载更新…",
+  updateDownloadProgressUnknown: (downloadedBytes) =>
+    `正在下载更新…已接收 ${(downloadedBytes / 1048576).toFixed(1)} MiB`,
   updateInstalling: "正在安装更新，应用将自动重启…",
   errMountLimit: "最多只能挂载 5 个工作区根目录。",
+  errMountIndexInvalid: "该挂载项已不存在，请刷新后再试。",
   errCommandConfigSave: (detail) =>
     detail ? `无法保存设置：${detail}` : "无法保存设置。",
   errCommandDialog: (detail) => (detail ? `选择文件夹失败：${detail}` : "选择文件夹失败。"),
@@ -186,6 +197,7 @@ const zhHant: Messages = {
   localApiStarting: "啟動中…",
   sectionMounts: "已掛載工作區（≤5）",
   btnPickDirectory: "選擇目錄…",
+  btnRemoveMount: "移除",
   btnCheckUpdates: "檢查更新",
   updateChecking: "正在檢查更新…",
   updateUpToDate: (v) => `目前已是最新版本（${v}）。`,
@@ -206,8 +218,11 @@ const zhHant: Messages = {
     total > 0
       ? `正在下載更新… ${Math.min(100, Math.round((downloaded / total) * 100))}%`
       : "正在下載更新…",
+  updateDownloadProgressUnknown: (downloadedBytes) =>
+    `正在下載更新… 已接收 ${(downloadedBytes / 1048576).toFixed(1)} MiB`,
   updateInstalling: "正在安裝更新，應用程式將自動重新啟動…",
   errMountLimit: "最多只能掛載 5 個工作區根目錄。",
+  errMountIndexInvalid: "此掛載項目已不存在，請重新整理後再試。",
   errCommandConfigSave: (detail) =>
     detail ? `無法儲存設定：${detail}` : "無法儲存設定。",
   errCommandDialog: (detail) => (detail ? `選擇資料夾失敗：${detail}` : "選擇資料夾失敗。"),

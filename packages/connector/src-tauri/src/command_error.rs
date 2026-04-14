@@ -23,6 +23,14 @@ pub fn mount_limit_reached() -> String {
     .to_invoke_string()
 }
 
+pub fn mount_index_invalid() -> String {
+    CommandErrorJson {
+        code: "MOUNT_INDEX_INVALID",
+        detail: None,
+    }
+    .to_invoke_string()
+}
+
 pub fn config_save_failed(detail: String) -> String {
     CommandErrorJson {
         code: "CONFIG_SAVE_FAILED",

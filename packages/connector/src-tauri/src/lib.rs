@@ -143,6 +143,38 @@ async fn add_mount_directory(
     Ok(())
 }
 
+#[tauri::command]
+async fn remove_mount_at_index(
+    state: tauri::State<'_, SharedState>,
+    index: u32,
+) -> Result<(), String> {
+    let mut st = state.write().await;
+    let n = st.config.mounted_roots.len();
+    let idx = index as usize;
+    if idx >= n {
+        return Err(command_error::mount_index_invalid());
+    }
+    let pri = st.config.primary_mounted_root_index as usize;
+    st.config.mounted_roots.remove(idx);
+    let len = st.config.mounted_roots.len();
+    let new_pri = if len == 0 {
+        0usize
+    } else if idx < pri {
+        pri - 1
+    } else if idx == pri {
+        0
+    } else {
+        pri
+    };
+    let new_pri = new_pri.min(len.saturating_sub(1));
+    st.config.primary_mounted_root_index = new_pri as u32;
+    config::save(&st.config).map_err(|e| command_error::config_save_failed(e.to_string()))?;
+    let snap = st.config.clone();
+    drop(st);
+    spawn_mount_sync_if_linked(snap);
+    Ok(())
+}
+
 async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
     let client = reqwest::Client::new();
     loop {
@@ -244,6 +276,7 @@ pub fn run() {
             set_mainline_base_url,
             regenerate_pairing_code,
             add_mount_directory,
+            remove_mount_at_index,
             set_ui_locale,
         ])
         .setup(

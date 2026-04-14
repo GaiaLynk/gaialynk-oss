@@ -41,11 +41,35 @@ function el(html: string): HTMLElement {
   return n;
 }
 
-function setUpdateCheckFeedback(text: string, cls: string): void {
+function setUpdateProgressBar(mode: "hidden" | "indeterminate" | "determinate", valuePct?: number): void {
+  const bar = document.getElementById("update-progress") as HTMLProgressElement | null;
+  if (!bar) return;
+  if (mode === "hidden") {
+    bar.hidden = true;
+    bar.removeAttribute("value");
+    return;
+  }
+  bar.hidden = false;
+  if (mode === "indeterminate") {
+    bar.removeAttribute("value");
+  } else {
+    const v = Math.min(100, Math.max(0, valuePct ?? 0));
+    bar.value = v;
+  }
+}
+
+function setUpdateCheckFeedback(text: string, cls: string, progress?: "indeterminate" | number): void {
   const el = document.getElementById("update-check-feedback");
   if (!el) return;
   el.textContent = text;
   el.className = `feedback ${cls}`.trim();
+  if (progress === undefined) {
+    setUpdateProgressBar("hidden");
+  } else if (progress === "indeterminate") {
+    setUpdateProgressBar("indeterminate");
+  } else {
+    setUpdateProgressBar("determinate", progress);
+  }
 }
 
 function clearUpdateCheckFeedback(): void {
@@ -53,6 +77,7 @@ function clearUpdateCheckFeedback(): void {
   if (!el) return;
   el.textContent = "";
   el.className = "feedback";
+  setUpdateProgressBar("hidden");
 }
 
 /**
@@ -90,7 +115,7 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
       return;
     }
     if (userInitiated) {
-      setUpdateCheckFeedback(m.updateDownloading, "pending");
+      setUpdateCheckFeedback(m.updateDownloading, "pending", "indeterminate");
       btn()?.toggleAttribute("disabled", true);
     }
     let downloaded = 0;
@@ -104,16 +129,28 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
         switch (ev.event) {
           case "Started":
             contentLength = ev.data.contentLength ?? 0;
+            if (userInitiated) {
+              if (contentLength > 0) {
+                setUpdateCheckFeedback(m.updateDownloading, "pending", 0);
+              } else {
+                setUpdateCheckFeedback(m.updateDownloading, "pending", "indeterminate");
+              }
+            }
             break;
           case "Progress":
             downloaded += ev.data.chunkLength ?? 0;
-            if (userInitiated && contentLength > 0) {
-              setUpdateCheckFeedback(m.updateDownloadProgress(downloaded, contentLength), "pending");
+            if (userInitiated) {
+              if (contentLength > 0) {
+                const pct = Math.min(100, Math.round((downloaded / contentLength) * 100));
+                setUpdateCheckFeedback(m.updateDownloadProgress(downloaded, contentLength), "pending", pct);
+              } else {
+                setUpdateCheckFeedback(m.updateDownloadProgressUnknown(downloaded), "pending", "indeterminate");
+              }
             }
             break;
           case "Finished":
             if (userInitiated) {
-              setUpdateCheckFeedback(m.updateInstalling, "pending");
+              setUpdateCheckFeedback(m.updateInstalling, "pending", 100);
             }
             break;
           default:
@@ -212,7 +249,10 @@ async function render() {
           </select>
         </div>
       </div>
-      <p id="update-check-feedback" class="feedback update-check-feedback" aria-live="polite"></p>
+      <div class="update-feedback-block">
+        <p id="update-check-feedback" class="feedback update-check-feedback" aria-live="polite"></p>
+        <progress id="update-progress" class="update-progress-bar" max="100" value="0" hidden></progress>
+      </div>
       <p id="invoke-err" class="feedback err invoke-err" role="alert"></p>
       <h1>${escapeAttr(m.title)}</h1>
       <section class="card">
@@ -242,7 +282,12 @@ async function render() {
       </section>
       <section class="card">
         <h2>${escapeAttr(m.sectionMounts)}</h2>
-        <ul id="roots">${s.mounted_roots.map((r) => `<li>${escapeAttr(r)}</li>`).join("")}</ul>
+        <ul id="roots" class="roots-list">${s.mounted_roots
+          .map(
+            (r, idx) =>
+              `<li class="mount-row"><span class="mount-path" title="${escapeAttr(r)}">${escapeAttr(r)}</span><button type="button" class="btn-remove-mount btn-secondary" data-mount-index="${idx}" aria-label="${escapeAttr(m.btnRemoveMount)}">${escapeAttr(m.btnRemoveMount)}</button></li>`,
+          )
+          .join("")}</ul>
         <button id="btn-add-root" type="button">${escapeAttr(m.btnPickDirectory)}</button>
       </section>
     </main>
@@ -321,6 +366,22 @@ async function render() {
       if (errEl) errEl.textContent = formatInvokeErrorForDisplay(e, getMessages(activeLocale));
     }
   });
+  document.getElementById("roots")?.addEventListener("click", async (ev) => {
+    const t = ev.target as HTMLElement | null;
+    const btn = t?.closest?.("button[data-mount-index]") as HTMLButtonElement | null;
+    if (!btn) return;
+    const raw = btn.dataset.mountIndex;
+    const index = raw === undefined ? NaN : Number.parseInt(raw, 10);
+    if (!Number.isFinite(index) || index < 0) return;
+    try {
+      await invoke("remove_mount_at_index", { index });
+      await render();
+    } catch (e) {
+      await render();
+      const errEl = document.getElementById("invoke-err");
+      if (errEl) errEl.textContent = formatInvokeErrorForDisplay(e, getMessages(activeLocale));
+    }
+  });
 }
 
 function localeOptionLabel(m: ReturnType<typeof getMessages>, loc: Locale): string {
@@ -339,8 +400,11 @@ style.textContent = `
   .wrap { max-width: 440px; margin: 0 auto; padding: 1.25rem; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem; flex-wrap: wrap; }
   .toolbar-right { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
-  .update-check-feedback { margin: 0 0 0.35rem; min-height: 0; }
-  .update-check-feedback:empty { display: none; }
+  .update-feedback-block { margin: 0 0 0.35rem; }
+  .update-check-feedback { margin: 0; min-height: 0; }
+  .update-check-feedback:empty + .update-progress-bar[hidden] { display: none; }
+  .update-progress-bar { width: 100%; height: 10px; margin: 0.35rem 0 0; border-radius: 4px; overflow: hidden; accent-color: #238636; }
+  .update-progress-bar[hidden] { display: none; }
   .invoke-err { margin: 0 0 0.75rem; min-height: 0; }
   .invoke-err:empty { display: none; }
   .lang-label { font-size: 0.8rem; color: #8b949e; }
@@ -363,7 +427,11 @@ style.textContent = `
   button:hover { filter: brightness(1.08); }
   button:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
   input[type=text] { width: 100%; box-sizing: border-box; padding: 0.45rem; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: inherit; margin-bottom: 0.5rem; }
-  ul { padding-left: 1.1rem; margin: 0.5rem 0; }
+  ul.roots-list { list-style: none; padding: 0; margin: 0.5rem 0; }
+  li.mount-row { display: flex; align-items: flex-start; gap: 0.5rem; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #30363d; }
+  li.mount-row:last-child { border-bottom: none; }
+  .mount-path { flex: 1; min-width: 0; font-size: 0.78rem; word-break: break-all; }
+  button.btn-remove-mount { flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.75rem; }
   code { font-size: 0.85rem; }
 `;
 document.head.appendChild(style);
