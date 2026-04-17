@@ -184,11 +184,11 @@ async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
         };
 
         if let Some(token) = token_snapshot {
-            tokio::time::sleep(Duration::from_secs(DEVICE_SESSION_CHECK_SECS)).await;
             let base = {
                 let st = shared.read().await;
                 st.config.mainline_base_url.clone()
             };
+            // 先请求再间隔：重启后首轮立即刷新主网 last_seen，避免官网 2 分钟在线窗口内长时间显示「离线」。
             match pairing::fetch_device_session_active(&client, &base, &token).await {
                 Ok(true) => {}
                 Ok(false) => {
@@ -209,6 +209,7 @@ async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
                 }
                 Err(_) => { /* 网络故障：保留 token，下次再试 */ }
             }
+            tokio::time::sleep(Duration::from_secs(DEVICE_SESSION_CHECK_SECS)).await;
             continue;
         }
 

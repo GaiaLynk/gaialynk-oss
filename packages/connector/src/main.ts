@@ -81,13 +81,15 @@ function clearUpdateCheckFeedback(): void {
 }
 
 /**
- * @param userInitiated 为 true 时展示进度/结果（按钮、托盘「检查更新」）；为 false 时仅启动静默检查，失败只打控制台便于排查。
+ * @param userInitiated 为 true 时在检查阶段展示「正在检查」等；为 false 时启动静默检查（无检查阶段 UI）。用户确认下载后两种路径均显示下载/安装进度。
  */
 async function runUpdateCheck(userInitiated: boolean): Promise<void> {
   if (updateCheckInFlight) return;
   updateCheckInFlight = true;
   const m = getMessages(activeLocale);
   const btn = (): HTMLElement | null => document.getElementById("btn-check-updates");
+  /** 用户确认下载后为 true，与 userInitiated 无关，用于下载/安装进度与失败提示 */
+  let showDownloadProgressUi = false;
   try {
     if (userInitiated) {
       setUpdateCheckFeedback(m.updateChecking, "pending");
@@ -114,10 +116,9 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
       await update.close();
       return;
     }
-    if (userInitiated) {
-      setUpdateCheckFeedback(m.updateDownloading, "pending", "indeterminate");
-      btn()?.toggleAttribute("disabled", true);
-    }
+    showDownloadProgressUi = true;
+    setUpdateCheckFeedback(m.updateDownloading, "pending", "indeterminate");
+    btn()?.toggleAttribute("disabled", true);
     let downloaded = 0;
     let contentLength = 0;
     try {
@@ -129,7 +130,7 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
         switch (ev.event) {
           case "Started":
             contentLength = ev.data.contentLength ?? 0;
-            if (userInitiated) {
+            if (showDownloadProgressUi) {
               if (contentLength > 0) {
                 setUpdateCheckFeedback(m.updateDownloading, "pending", 0);
               } else {
@@ -139,7 +140,7 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
             break;
           case "Progress":
             downloaded += ev.data.chunkLength ?? 0;
-            if (userInitiated) {
+            if (showDownloadProgressUi) {
               if (contentLength > 0) {
                 const pct = Math.min(100, Math.round((downloaded / contentLength) * 100));
                 setUpdateCheckFeedback(m.updateDownloadProgress(downloaded, contentLength), "pending", pct);
@@ -149,7 +150,7 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
             }
             break;
           case "Finished":
-            if (userInitiated) {
+            if (showDownloadProgressUi) {
               setUpdateCheckFeedback(m.updateInstalling, "pending", 100);
             }
             break;
@@ -162,7 +163,7 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
     } catch (installErr) {
       const detail = installErr instanceof Error ? installErr.message : String(installErr);
       console.error(UPDATER_LOG, "download/install/relaunch failed:", detail, installErr);
-      if (userInitiated) {
+      if (showDownloadProgressUi) {
         clearUpdateCheckFeedback();
         btn()?.toggleAttribute("disabled", false);
         window.alert(m.updateCheckFailed(detail));
