@@ -177,8 +177,12 @@ async fn fs_write(
         check_origin_and_token(&headers, &st.config)?;
         mounted_paths(&st.config)
     };
-    let p = fs_ops::resolve_within_roots_at_index(&roots, body.root_index as usize, &body.path)
-        .map_err(|_| StatusCode::FORBIDDEN)?;
+    let p = fs_ops::resolve_within_roots_at_index_for_write(
+        &roots,
+        body.root_index as usize,
+        &body.path,
+    )
+    .map_err(|_| StatusCode::FORBIDDEN)?;
     use base64::Engine;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(body.content_base64.as_bytes())

@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
 pub const MAX_READ_BYTES: u64 = 10 * 1024 * 1024;
@@ -88,6 +88,70 @@ pub fn resolve_within_roots_at_index(
     }
 }
 
+/// 用于 `file_write`：目标文件可以尚不存在（新建）。对已有路径段逐级 `canonicalize` 以防 symlink 逃逸；
+/// 一旦遇到尚不存在的路径前缀，将剩余段一次性拼上，并保证仍位于挂载根之下。
+pub fn resolve_within_roots_at_index_for_write(
+    roots: &[PathBuf],
+    root_index: usize,
+    user_path: &str,
+) -> Result<PathBuf, FsError> {
+    if roots.is_empty() {
+        return Err(FsError::NoMounts);
+    }
+    let Some(root) = roots.get(root_index) else {
+        return Err(FsError::OutsideMounts);
+    };
+    let root_canon = root.canonicalize().map_err(|_| FsError::InvalidPath)?;
+    let trimmed = user_path.trim();
+    if trimmed.is_empty() {
+        return Err(FsError::InvalidPath);
+    }
+    let rel = Path::new(trimmed);
+    if rel.is_absolute() {
+        return Err(FsError::OutsideMounts);
+    }
+    let mut parts: Vec<std::ffi::OsString> = Vec::new();
+    for c in rel.components() {
+        match c {
+            Component::Normal(name) => parts.push(name.to_os_string()),
+            Component::ParentDir => return Err(FsError::OutsideMounts),
+            Component::CurDir => {}
+            _ => return Err(FsError::OutsideMounts),
+        }
+    }
+    if parts.is_empty() {
+        return Err(FsError::InvalidPath);
+    }
+    let n = parts.len();
+    let mut cur = root_canon.clone();
+    for i in 0..n {
+        cur.push(&parts[i]);
+        if i == n - 1 {
+            if !cur.starts_with(&root_canon) {
+                return Err(FsError::OutsideMounts);
+            }
+            return Ok(cur);
+        }
+        if !cur.exists() {
+            for j in i + 1..n {
+                cur.push(&parts[j]);
+            }
+            if !cur.starts_with(&root_canon) {
+                return Err(FsError::OutsideMounts);
+            }
+            return Ok(cur);
+        }
+        if !cur.is_dir() {
+            return Err(FsError::InvalidPath);
+        }
+        cur = cur.canonicalize().map_err(|_| FsError::InvalidPath)?;
+        if !cur.starts_with(&root_canon) {
+            return Err(FsError::OutsideMounts);
+        }
+    }
+    Err(FsError::InvalidPath)
+}
+
 fn is_same_or_child(root: &Path, child: &Path) -> bool {
     child.starts_with(root)
 }
@@ -167,5 +231,39 @@ mod tests {
         let roots = vec![safe.clone()];
         let p = resolve_within_roots(&roots, "a.txt").unwrap();
         assert_eq!(p, f.canonicalize().unwrap());
+    }
+
+    #[test]
+    fn write_resolve_allows_new_file_at_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let safe = tmp.path().join("workspace");
+        fs::create_dir_all(&safe).unwrap();
+        let root = safe.canonicalize().unwrap();
+        let roots = vec![safe];
+        let p = resolve_within_roots_at_index_for_write(&roots, 0, "GaiaLynk-New.md").unwrap();
+        assert_eq!(p, root.join("GaiaLynk-New.md"));
+        assert!(!p.exists());
+    }
+
+    #[test]
+    fn write_resolve_allows_nested_new_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let safe = tmp.path().join("workspace");
+        fs::create_dir_all(&safe).unwrap();
+        let root = safe.canonicalize().unwrap();
+        let roots = vec![safe];
+        let p = resolve_within_roots_at_index_for_write(&roots, 0, "a/b/new.txt").unwrap();
+        assert_eq!(p, root.join("a/b/new.txt"));
+        assert!(!p.exists());
+    }
+
+    #[test]
+    fn write_resolve_rejects_parent_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let safe = tmp.path().join("workspace");
+        fs::create_dir_all(&safe).unwrap();
+        let roots = vec![safe];
+        let r = resolve_within_roots_at_index_for_write(&roots, 0, "../evil.txt");
+        assert!(matches!(r, Err(FsError::OutsideMounts)));
     }
 }
