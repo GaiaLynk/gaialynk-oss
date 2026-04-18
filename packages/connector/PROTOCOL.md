@@ -133,7 +133,7 @@ Connector 在 **`GET /api/v1/connectors/desktop/ws?device_token=`** 上收到的
 | `root_index` | **可选**，默认 `0`；与 `POST .../device/mounts` 同步的 `mounted_roots` 下标一致，本机 `/fs/*` 仅解析该根 |
 | `content_base64` | **可选**，仅当 `action=file_write` 且主线请求携带写入正文时出现；标准 base64（UTF-8 字节） |
 
-Connector 应在实现 WS 客户端后，对 `file_write` 调用本机 **`POST /fs/write`**（`path` + `content_base64` + `root_index`），再 **`POST .../execute-result`** 回传结果（失败时应重试并打日志）。详见 `docs/internal/cto-desktop-agent-write-roadmap.md`。
+Connector 应在实现 WS 客户端后，对 `file_read` 调用本机 **`GET /fs/read`**（`path` + `root_index`），对 `file_write` 调用本机 **`POST /fs/write`**（`path` + `content_base64` + `root_index`），再 **`POST .../execute-result`** 回传结果（`file_read` 成功时 `result` 为本机 JSON：`{ "encoding":"base64","content":"..." }`；失败时应重试并打日志）。Web 侧：**首轮** Agent 回复中若含 `gaialynk-desktop-read` 围栏，主线解析路径后经 Connector 读盘，并将内容合并进**第二轮**发往同一 Agent 的输入（会话中通常只展示最终回复；路径/工作区策略与 `file_write` 一致）。详见 `docs/internal/cto-desktop-agent-write-roadmap.md`。
 
 ### 3.1.1 `GET /api/v1/connectors/desktop/pending-executes`（device JWT，补拉）
 
