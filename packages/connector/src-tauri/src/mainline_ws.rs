@@ -1,4 +1,5 @@
 //! 主网 `GET .../connectors/desktop/ws` 客户端：消费 `desktop_execute`，经本机 `local_server` 执行后 `POST .../execute-result`（路线图阶段 B）。
+//! 重连成功后会 `GET .../pending-executes` 补拉断线期间未结算任务；`execute-result` 带有限次重试与日志。
 
 use crate::local_server::SharedState;
 use futures::{SinkExt, StreamExt};
@@ -101,7 +102,10 @@ async fn handle_desktop_execute_local(
     }
 }
 
-async fn post_execute_result(
+const EXECUTE_RESULT_ATTEMPTS: usize = 4;
+const EXECUTE_RESULT_BACKOFF_BASE_MS: u64 = 400;
+
+async fn post_execute_result_with_retries(
     client: &reqwest::Client,
     mainline_base: &str,
     device_token: &str,
@@ -114,20 +118,248 @@ async fn post_execute_result(
         "{}/api/v1/connectors/desktop/execute-result",
         mainline_base.trim_end_matches('/')
     );
-    let _ = client
-        .post(url)
-        .header(
-            "Authorization",
-            format!("Bearer {}", device_token),
-        )
-        .json(&json!({
-            "request_id": request_id,
-            "ok": ok,
-            "result": result,
-            "error": error,
-        }))
+    let body = json!({
+        "request_id": request_id,
+        "ok": ok,
+        "result": result,
+        "error": error,
+    });
+    for attempt in 0..EXECUTE_RESULT_ATTEMPTS {
+        let res = match client
+            .post(&url)
+            .header(
+                "Authorization",
+                format!("Bearer {}", device_token),
+            )
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!(
+                    "[gaialynk-connector mainline-ws] execute-result request_id={} attempt {}/{} network error: {e}",
+                    request_id,
+                    attempt + 1,
+                    EXECUTE_RESULT_ATTEMPTS
+                );
+                if attempt + 1 < EXECUTE_RESULT_ATTEMPTS {
+                    tokio::time::sleep(Duration::from_millis(
+                        EXECUTE_RESULT_BACKOFF_BASE_MS * (1u64 << attempt),
+                    ))
+                    .await;
+                }
+                continue;
+            }
+        };
+        let status = res.status();
+        if status.is_success() {
+            return;
+        }
+        let bytes = res.bytes().await.unwrap_or_default();
+        let snip = String::from_utf8_lossy(&bytes[..bytes.len().min(240)]);
+        eprintln!(
+            "[gaialynk-connector mainline-ws] execute-result request_id={} attempt {}/{} http {} {}",
+            request_id,
+            attempt + 1,
+            EXECUTE_RESULT_ATTEMPTS,
+            status,
+            snip
+        );
+        if attempt + 1 < EXECUTE_RESULT_ATTEMPTS {
+            tokio::time::sleep(Duration::from_millis(
+                EXECUTE_RESULT_BACKOFF_BASE_MS * (1u64 << attempt),
+            ))
+            .await;
+        }
+    }
+    eprintln!(
+        "[gaialynk-connector mainline-ws] execute-result request_id={} giving up after {} attempts",
+        request_id, EXECUTE_RESULT_ATTEMPTS
+    );
+}
+
+async fn process_one_desktop_execute(
+    client: &reqwest::Client,
+    shared: &SharedState,
+    device_token: &str,
+    local_base: &str,
+    request_id: &str,
+    action: &str,
+    path: &str,
+    root_index: u32,
+    content_b64: Option<&str>,
+) {
+    let mainline_base = {
+        let st = shared.read().await;
+        st.config.mainline_base_url.clone()
+    };
+
+    let exec = handle_desktop_execute_local(
+        client,
+        local_base,
+        device_token,
+        action,
+        path,
+        root_index,
+        content_b64,
+    )
+    .await;
+
+    let (ok, result, error) = match exec {
+        Ok(ExecOk::Json(val)) => (true, Some(val), None),
+        Ok(ExecOk::Empty) => (true, Some(json!({ "written": true })), None),
+        Err(e) => (false, None, Some(e.to_string())),
+    };
+
+    post_execute_result_with_retries(
+        client,
+        &mainline_base,
+        device_token,
+        request_id,
+        ok,
+        result,
+        error,
+    )
+    .await;
+}
+
+/// WebSocket 文本帧：`desktop_execute`
+async fn handle_ws_text_desktop_execute(
+    client: &reqwest::Client,
+    shared: &SharedState,
+    device_token: &str,
+    my_device_id: &str,
+    local_base: &str,
+    text: &str,
+) {
+    let v: Value = match serde_json::from_str(text) {
+        Ok(x) => x,
+        Err(_) => return,
+    };
+    let Some(ty) = v.get("type").and_then(|x| x.as_str()) else {
+        return;
+    };
+    if ty != "desktop_execute" {
+        return;
+    }
+    if v.get("device_id").and_then(|x| x.as_str()) != Some(my_device_id) {
+        return;
+    }
+    let Some(request_id) = v.get("request_id").and_then(|x| x.as_str()) else {
+        return;
+    };
+    let action = v.get("action").and_then(|x| x.as_str()).unwrap_or("");
+    let path = v.get("path").and_then(|x| x.as_str()).unwrap_or("");
+    let content_b64 = v.get("content_base64").and_then(|x| x.as_str());
+    let root_index = v
+        .get("root_index")
+        .and_then(|x| x.as_u64())
+        .map(|n| n as u32)
+        .unwrap_or(0);
+
+    process_one_desktop_execute(
+        client,
+        shared,
+        device_token,
+        local_base,
+        request_id,
+        action,
+        path,
+        root_index,
+        content_b64,
+    )
+    .await;
+}
+
+/// 重连后 HTTP 补拉仍 pending 的任务（与 WS `desktop_execute` 同形）。
+async fn fetch_and_process_pending_executes(
+    client: &reqwest::Client,
+    shared: &SharedState,
+    device_token: &str,
+    my_device_id: &str,
+    local_base: &str,
+) {
+    let mainline_base = {
+        let st = shared.read().await;
+        st.config.mainline_base_url.clone()
+    };
+    let url = format!(
+        "{}/api/v1/connectors/desktop/pending-executes",
+        mainline_base.trim_end_matches('/')
+    );
+    let res = match client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", device_token))
         .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[gaialynk-connector mainline-ws] pending-executes request failed: {e}");
+            return;
+        }
+    };
+    if !res.status().is_success() {
+        eprintln!(
+            "[gaialynk-connector mainline-ws] pending-executes http {}",
+            res.status()
+        );
+        return;
+    }
+    let body: Value = match res.json().await {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("[gaialynk-connector mainline-ws] pending-executes json: {e}");
+            return;
+        }
+    };
+    let Some(items) = body
+        .get("data")
+        .and_then(|d| d.get("items"))
+        .and_then(|x| x.as_array())
+    else {
+        return;
+    };
+    if items.is_empty() {
+        return;
+    }
+    eprintln!(
+        "[gaialynk-connector mainline-ws] pending-executes: processing {} job(s) after (re)connect",
+        items.len()
+    );
+    for item in items {
+        let Some(request_id) = item.get("request_id").and_then(|x| x.as_str()) else {
+            continue;
+        };
+        let action = item.get("action").and_then(|x| x.as_str()).unwrap_or("");
+        let path = item.get("path").and_then(|x| x.as_str()).unwrap_or("");
+        let content_b64 = item.get("content_base64").and_then(|x| x.as_str());
+        let root_index = item
+            .get("root_index")
+            .and_then(|x| x.as_u64())
+            .map(|n| n as u32)
+            .unwrap_or(0);
+        if item
+            .get("device_id")
+            .and_then(|x| x.as_str())
+            .is_some_and(|id| id != my_device_id)
+        {
+            continue;
+        }
+        process_one_desktop_execute(
+            client,
+            shared,
+            device_token,
+            local_base,
+            request_id,
+            action,
+            path,
+            root_index,
+            content_b64,
+        )
         .await;
+    }
 }
 
 async fn run_one_ws_session(
@@ -139,65 +371,27 @@ async fn run_one_ws_session(
 ) -> anyhow::Result<()> {
     let (mut ws, _) = tokio_tungstenite::connect_async(ws_url.as_str()).await?;
     let client = reqwest::Client::new();
+
+    fetch_and_process_pending_executes(
+        &client,
+        shared,
+        device_token,
+        my_device_id,
+        local_base,
+    )
+    .await;
+
     while let Some(msg) = ws.next().await {
         let msg = msg?;
         match msg {
             Message::Text(t) => {
-                let v: Value = match serde_json::from_str(&t) {
-                    Ok(x) => x,
-                    Err(_) => continue,
-                };
-                let Some(ty) = v.get("type").and_then(|x| x.as_str()) else {
-                    continue;
-                };
-                if ty != "desktop_execute" {
-                    continue;
-                }
-                if v.get("device_id").and_then(|x| x.as_str()) != Some(my_device_id) {
-                    continue;
-                }
-                let Some(request_id) = v.get("request_id").and_then(|x| x.as_str()) else {
-                    continue;
-                };
-                let action = v.get("action").and_then(|x| x.as_str()).unwrap_or("");
-                let path = v.get("path").and_then(|x| x.as_str()).unwrap_or("");
-                let content_b64 = v.get("content_base64").and_then(|x| x.as_str());
-                let root_index = v
-                    .get("root_index")
-                    .and_then(|x| x.as_u64())
-                    .map(|n| n as u32)
-                    .unwrap_or(0);
-
-                let mainline_base = {
-                    let st = shared.read().await;
-                    st.config.mainline_base_url.clone()
-                };
-
-                let exec = handle_desktop_execute_local(
+                handle_ws_text_desktop_execute(
                     &client,
+                    shared,
+                    device_token,
+                    my_device_id,
                     local_base,
-                    device_token,
-                    action,
-                    path,
-                    root_index,
-                    content_b64,
-                )
-                .await;
-
-                let (ok, result, error) = match exec {
-                    Ok(ExecOk::Json(val)) => (true, Some(val), None),
-                    Ok(ExecOk::Empty) => (true, Some(json!({ "written": true })), None),
-                    Err(e) => (false, None, Some(e.to_string())),
-                };
-
-                post_execute_result(
-                    &client,
-                    &mainline_base,
-                    device_token,
-                    request_id,
-                    ok,
-                    result,
-                    error,
+                    &t,
                 )
                 .await;
             }
