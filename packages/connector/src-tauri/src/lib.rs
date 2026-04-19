@@ -266,6 +266,11 @@ pub fn run() {
         mainline_ws::mainline_ws_loop(s_ws).await;
     });
 
+    let s_pending = shared.clone();
+    tauri::async_runtime::spawn(async move {
+        mainline_ws::pending_executes_over_http_loop(s_pending).await;
+    });
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())

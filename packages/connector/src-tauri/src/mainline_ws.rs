@@ -244,7 +244,11 @@ async fn handle_ws_text_desktop_execute(
     if ty != "desktop_execute" {
         return;
     }
-    if v.get("device_id").and_then(|x| x.as_str()) != Some(my_device_id) {
+    // 主线 JSON 中的 UUID 与本地持久化可能大小写不一致；不一致时若严格相等会静默丢帧 → 任务永不结算。
+    let Some(msg_device) = v.get("device_id").and_then(|x| x.as_str()) else {
+        return;
+    };
+    if !msg_device.eq_ignore_ascii_case(my_device_id) {
         return;
     }
     let Some(request_id) = v.get("request_id").and_then(|x| x.as_str()) else {
@@ -344,7 +348,7 @@ async fn fetch_and_process_pending_executes(
         if item
             .get("device_id")
             .and_then(|x| x.as_str())
-            .is_some_and(|id| id != my_device_id)
+            .is_some_and(|id| !id.eq_ignore_ascii_case(my_device_id))
         {
             continue;
         }
@@ -375,6 +379,10 @@ async fn fetch_and_process_pending_executes(
 
 /// 多副本 / Redis 扇出偶发丢帧时，仅靠 WS 文本帧可能收不到 `desktop_execute`；定时补拉 pending 与重连后补拉形成双保险。
 const PENDING_EXECUTES_POLL_SECS: u64 = 20;
+
+/// 与 WebSocket 无关的 HTTP 补拉间隔：当 `wss` 因网络/代理/证书无法建立时，`run_one_ws_session` 根本不会运行，
+/// 原先仅在 WS 会话内的 pending 轮询也永远不会执行 → 本机读盘任务一直 pending 直到主线超时。
+const PENDING_EXECUTES_HTTP_POLL_SECS: u64 = 8;
 
 async fn run_one_ws_session(
     shared: &SharedState,
@@ -447,6 +455,29 @@ async fn run_one_ws_session(
         }
     }
     Ok(())
+}
+
+/// 只要已配对且本机 API 就绪，即周期性 `GET .../pending-executes`，不依赖 WebSocket 是否连通。
+pub async fn pending_executes_over_http_loop(shared: SharedState) {
+    loop {
+        tokio::time::sleep(Duration::from_secs(PENDING_EXECUTES_HTTP_POLL_SECS)).await;
+        let (token_opt, device_id_opt, local_opt) = {
+            let st = shared.read().await;
+            (
+                st.config.device_token.clone(),
+                st.config.device_id.clone(),
+                st.local_api_base.clone(),
+            )
+        };
+        let (Some(token), Some(device_id), Some(local_base)) = (token_opt, device_id_opt, local_opt) else {
+            continue;
+        };
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(90))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        fetch_and_process_pending_executes(&client, &shared, &token, &device_id, local_base.as_str()).await;
+    }
 }
 
 pub async fn mainline_ws_loop(shared: SharedState) {
