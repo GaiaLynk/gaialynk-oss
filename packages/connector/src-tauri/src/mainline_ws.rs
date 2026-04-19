@@ -392,6 +392,10 @@ async fn run_one_ws_session(
     ws_url: Url,
 ) -> anyhow::Result<()> {
     let (mut ws, _) = tokio_tungstenite::connect_async(ws_url.as_str()).await?;
+    let host = ws_url.host_str().unwrap_or("?");
+    eprintln!(
+        "[gaialynk-connector mainline-ws] WebSocket connected to {host} (path /api/v1/connectors/desktop/ws); listening for desktop_execute"
+    );
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(90))
         .build()
@@ -481,6 +485,7 @@ pub async fn pending_executes_over_http_loop(shared: SharedState) {
 }
 
 pub async fn mainline_ws_loop(shared: SharedState) {
+    let mut idle_spins: u32 = 0;
     loop {
         let (token_opt, device_id_opt, mainline_base, local_opt) = {
             let st = shared.read().await;
@@ -492,10 +497,24 @@ pub async fn mainline_ws_loop(shared: SharedState) {
             )
         };
 
+        let has_pairing = token_opt.is_some() && device_id_opt.is_some();
+        let has_local = local_opt.is_some();
         let (Some(token), Some(device_id), Some(local_base)) = (token_opt, device_id_opt, local_opt) else {
+            idle_spins = idle_spins.saturating_add(1);
+            let detail = if has_pairing && !has_local {
+                "local HTTP not bound yet (mainline_ws starts in parallel with local server; the \"gaialynk-connector: local HTTP\" line should appear within ~1s)"
+            } else if !has_pairing {
+                "need pairing: save device_token + device_id in Connector (6-digit code on gaialynk.com)"
+            } else {
+                "incomplete state (unexpected); need device_token + device_id + local HTTP base"
+            };
+            if idle_spins == 1 || idle_spins % 15 == 0 {
+                eprintln!("[gaialynk-connector mainline-ws] waiting (#{idle_spins}): {detail}");
+            }
             tokio::time::sleep(Duration::from_secs(2)).await;
             continue;
         };
+        idle_spins = 0;
 
         let ws_url = match build_desktop_ws_url(&mainline_base, &token) {
             Ok(u) => u,
