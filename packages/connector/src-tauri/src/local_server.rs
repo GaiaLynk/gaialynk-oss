@@ -61,6 +61,25 @@ fn write_confirmed(headers: &HeaderMap) -> bool {
         .unwrap_or(false)
 }
 
+/// 本机 HTTP 监听 **随机端口**；浏览器 / WebView / 部分 HTTP 客户端可能对 loopback 带 `Origin`，
+/// 无法事先写入 `allowed_web_origins`（仅含官网与 dev 固定口），故放行 loopback（含 IPv6 `::1`）。
+fn is_loopback_http_origin(origin: &str) -> bool {
+    if matches!(
+        origin,
+        "http://127.0.0.1" | "http://localhost" | "http://[::1]"
+    ) {
+        return true;
+    }
+    let rest = origin
+        .strip_prefix("http://127.0.0.1:")
+        .or_else(|| origin.strip_prefix("http://localhost:"))
+        .or_else(|| origin.strip_prefix("http://[::1]:"));
+    let Some(rest) = rest else {
+        return false;
+    };
+    !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
+}
+
 fn check_origin_and_token(headers: &HeaderMap, config: &PersistedConfig) -> Result<(), StatusCode> {
     let token = bearer_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
     let expected = config
@@ -74,13 +93,13 @@ fn check_origin_and_token(headers: &HeaderMap, config: &PersistedConfig) -> Resu
         .get(axum::http::header::ORIGIN)
         .and_then(|v| v.to_str().ok())
     {
-        if !config
-            .allowed_web_origins
-            .iter()
-            .any(|o| o.as_str() == origin)
-        {
-            return Err(StatusCode::FORBIDDEN);
+        if config.allowed_web_origins.iter().any(|o| o.as_str() == origin) {
+            return Ok(());
         }
+        if is_loopback_http_origin(origin) {
+            return Ok(());
+        }
+        return Err(StatusCode::FORBIDDEN);
     }
     Ok(())
 }
@@ -154,9 +173,11 @@ async fn fs_read(
         check_origin_and_token(&headers, &st.config)?;
         mounted_paths(&st.config)
     };
-    let p = fs_ops::resolve_within_roots_at_index(&roots, q.root_index as usize, &path_str)
+    // 与 file_write 共用解析：不要求目标文件已存在即可解析到合法路径；读盘失败再区分 404。
+    let p = fs_ops::resolve_within_roots_at_index_for_write(&roots, q.root_index as usize, &path_str)
         .map_err(|_| StatusCode::FORBIDDEN)?;
     let bytes = fs_ops::read_file_bounded(&p).map_err(|e| match e {
+        fs_ops::FsError::NotFile => StatusCode::NOT_FOUND,
         fs_ops::FsError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     })?;
@@ -290,4 +311,26 @@ pub async fn run_server(shared: SharedState) {
         eprintln!("gaialynk-connector: local HTTP {base}");
     }
     let _ = axum::serve(listener, app).await;
+}
+
+#[cfg(test)]
+mod loopback_origin_tests {
+    use super::is_loopback_http_origin;
+
+    #[test]
+    fn accepts_numeric_ports_and_bare_loopback() {
+        assert!(is_loopback_http_origin("http://127.0.0.1:64948"));
+        assert!(is_loopback_http_origin("http://localhost:3000"));
+        assert!(is_loopback_http_origin("http://[::1]:64948"));
+        assert!(is_loopback_http_origin("http://127.0.0.1"));
+        assert!(is_loopback_http_origin("http://localhost"));
+        assert!(is_loopback_http_origin("http://[::1]"));
+    }
+
+    #[test]
+    fn rejects_non_loopback() {
+        assert!(!is_loopback_http_origin("https://gaialynk.com"));
+        assert!(!is_loopback_http_origin("http://127.0.0.1.evil:80"));
+        assert!(!is_loopback_http_origin("http://192.168.1.1:8080"));
+    }
 }

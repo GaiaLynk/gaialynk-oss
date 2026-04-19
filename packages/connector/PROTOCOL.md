@@ -62,7 +62,7 @@ Authorization: Bearer {device_token}
 | 头 | 规则 |
 |----|------|
 | `Authorization` | `Bearer {device_token}`，与配对结果一致 |
-| `Origin` | 若存在，必须在 Connector 本地配置的 `allowed_web_origins` 列表中 |
+| `Origin` | 若存在：须在 `allowed_web_origins` 中，**或**为 loopback：`http://127.0.0.1` / `http://127.0.0.1:{端口}` / `http://localhost` / `http://localhost:{端口}` / `http://[::1]` / `http://[::1]:{端口}`（随机端口无法事先列入白名单） |
 | `X-Gaialynk-Confirmed` | `POST /fs/write` 须为 `true`（大小写不敏感），否则 **403**（Trust 确认流由 Web/E-20 负责） |
 
 ### 2.1 `GET /fs/list?path=`
