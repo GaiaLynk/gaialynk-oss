@@ -153,7 +153,8 @@ async fn post_execute_result_with_retries(
             }
         };
         let status = res.status();
-        if status.is_success() {
+        if status.is_success() || status == reqwest::StatusCode::CONFLICT {
+            // 主线已结算（重复 request_id）；本地 + Redis 双投递时常见
             return;
         }
         let bytes = res.bytes().await.unwrap_or_default();
@@ -347,18 +348,28 @@ async fn fetch_and_process_pending_executes(
         {
             continue;
         }
-        process_one_desktop_execute(
-            client,
-            shared,
-            device_token,
-            local_base,
-            request_id,
-            action,
-            path,
-            root_index,
-            content_b64,
-        )
-        .await;
+        let client = client.clone();
+        let shared = shared.clone();
+        let device_token = device_token.to_string();
+        let local_base = local_base.to_string();
+        let request_id = request_id.to_string();
+        let action = action.to_string();
+        let path = path.to_string();
+        let content_b64 = content_b64.map(|s| s.to_string());
+        tokio::spawn(async move {
+            process_one_desktop_execute(
+                &client,
+                &shared,
+                &device_token,
+                &local_base,
+                &request_id,
+                &action,
+                &path,
+                root_index,
+                content_b64.as_deref(),
+            )
+            .await;
+        });
     }
 }
 
@@ -373,7 +384,10 @@ async fn run_one_ws_session(
     ws_url: Url,
 ) -> anyhow::Result<()> {
     let (mut ws, _) = tokio_tungstenite::connect_async(ws_url.as_str()).await?;
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
 
     fetch_and_process_pending_executes(
         &client,
@@ -405,15 +419,23 @@ async fn run_one_ws_session(
                 let msg = msg?;
                 match msg {
                     Message::Text(t) => {
-                        handle_ws_text_desktop_execute(
-                            &client,
-                            shared,
-                            device_token,
-                            my_device_id,
-                            local_base,
-                            &t,
-                        )
-                        .await;
+                        let text = t.to_string();
+                        let client = client.clone();
+                        let shared = shared.clone();
+                        let device_token = device_token.to_string();
+                        let my_device_id = my_device_id.to_string();
+                        let local_base = local_base.to_string();
+                        tokio::spawn(async move {
+                            handle_ws_text_desktop_execute(
+                                &client,
+                                &shared,
+                                &device_token,
+                                &my_device_id,
+                                &local_base,
+                                &text,
+                            )
+                            .await;
+                        });
                     }
                     Message::Ping(p) => {
                         let _ = ws.send(Message::Pong(p)).await;
