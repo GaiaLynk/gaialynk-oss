@@ -362,6 +362,9 @@ async fn fetch_and_process_pending_executes(
     }
 }
 
+/// 多副本 / Redis 扇出偶发丢帧时，仅靠 WS 文本帧可能收不到 `desktop_execute`；定时补拉 pending 与重连后补拉形成双保险。
+const PENDING_EXECUTES_POLL_SECS: u64 = 20;
+
 async fn run_one_ws_session(
     shared: &SharedState,
     device_token: &str,
@@ -381,25 +384,44 @@ async fn run_one_ws_session(
     )
     .await;
 
-    while let Some(msg) = ws.next().await {
-        let msg = msg?;
-        match msg {
-            Message::Text(t) => {
-                handle_ws_text_desktop_execute(
+    let mut interval = tokio::time::interval(Duration::from_secs(PENDING_EXECUTES_POLL_SECS));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    interval.tick().await;
+
+    loop {
+        tokio::select! {
+            _ = interval.tick() => {
+                fetch_and_process_pending_executes(
                     &client,
                     shared,
                     device_token,
                     my_device_id,
                     local_base,
-                    &t,
                 )
                 .await;
             }
-            Message::Ping(p) => {
-                let _ = ws.send(Message::Pong(p)).await;
+            msg = ws.next() => {
+                let Some(msg) = msg else { break };
+                let msg = msg?;
+                match msg {
+                    Message::Text(t) => {
+                        handle_ws_text_desktop_execute(
+                            &client,
+                            shared,
+                            device_token,
+                            my_device_id,
+                            local_base,
+                            &t,
+                        )
+                        .await;
+                    }
+                    Message::Ping(p) => {
+                        let _ = ws.send(Message::Pong(p)).await;
+                    }
+                    Message::Close(_) => break,
+                    _ => {}
+                }
             }
-            Message::Close(_) => break,
-            _ => {}
         }
     }
     Ok(())
