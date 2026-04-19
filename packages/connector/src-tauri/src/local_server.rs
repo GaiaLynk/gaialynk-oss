@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use axum::extract::Query;
 use axum::http::{HeaderMap, StatusCode};
+use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -17,7 +18,7 @@ use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::config::PersistedConfig;
-use crate::fs_ops::{self, DirEntryJson};
+use crate::fs_ops::{self, DirEntryJson, FsError, SmartReadOutcome};
 use crate::pairing;
 
 pub type SharedState = std::sync::Arc<tokio::sync::RwLock<ServerState>>;
@@ -166,25 +167,52 @@ async fn fs_read(
     axum::extract::State(shared): axum::extract::State<SharedState>,
     headers: HeaderMap,
     Query(q): Query<PathQuery>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
-    let path_str = q.path.ok_or(StatusCode::BAD_REQUEST)?;
+) -> Result<Json<serde_json::Value>, axum::response::Response> {
+    let path_str = match q.path {
+        Some(p) => p,
+        None => return Err(StatusCode::BAD_REQUEST.into_response()),
+    };
     let roots = {
         let st = shared.read().await;
-        check_origin_and_token(&headers, &st.config)?;
+        check_origin_and_token(&headers, &st.config).map_err(|s| s.into_response())?;
         mounted_paths(&st.config)
     };
-    // 与 file_write 共用解析：不要求目标文件已存在即可解析到合法路径；读盘失败再区分 404。
-    let p = fs_ops::resolve_within_roots_at_index_for_write(&roots, q.root_index as usize, &path_str)
-        .map_err(|_| StatusCode::FORBIDDEN)?;
-    let bytes = fs_ops::read_file_bounded(&p).map_err(|e| match e {
-        fs_ops::FsError::NotFile => StatusCode::NOT_FOUND,
-        fs_ops::FsError::TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
-        _ => StatusCode::INTERNAL_SERVER_ERROR,
-    })?;
+    let read = fs_ops::read_file_smart(&roots, q.root_index as usize, &path_str);
     use base64::Engine;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-    schedule_receipt(shared.clone(), "file_read", &p, "ok", None);
-    Ok(Json(json!({ "encoding": "base64", "content": b64 })))
+    match read {
+        Ok(SmartReadOutcome::Single(p, bytes)) => {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+            schedule_receipt(shared.clone(), "file_read", &p, "ok", None);
+            Ok(Json(json!({ "encoding": "base64", "content": b64 })))
+        }
+        Ok(SmartReadOutcome::Multi(parts)) => {
+            let mut files = Vec::new();
+            for (rel, bytes) in &parts {
+                let p = fs_ops::resolve_within_roots_at_index_for_write(
+                    &roots,
+                    q.root_index as usize,
+                    rel,
+                )
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?;
+                schedule_receipt(shared.clone(), "file_read", &p, "ok", None);
+                files.push(json!({
+                    "path": rel,
+                    "encoding": "base64",
+                    "content": base64::engine::general_purpose::STANDARD.encode(bytes),
+                }));
+            }
+            Ok(Json(json!({
+                "encoding": "multi_base64_v1",
+                "files": files,
+            })))
+        }
+        Err(FsError::NotFile) => Err(StatusCode::NOT_FOUND.into_response()),
+        Err(FsError::TooLarge) => Err(StatusCode::PAYLOAD_TOO_LARGE.into_response()),
+        Err(FsError::OutsideMounts | FsError::InvalidPath) => {
+            Err(StatusCode::FORBIDDEN.into_response())
+        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
+    }
 }
 
 async fn fs_write(

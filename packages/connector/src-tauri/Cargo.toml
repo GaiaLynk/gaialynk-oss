@@ -1,6 +1,6 @@
 [package]
 name = "gaialynk_connector"
-version = "0.1.22"
+version = "0.1.23"
 description = "GaiaLynk lightweight desktop connector (Tauri)"
 edition = "2021"
 license = "MIT"

@@ -27,6 +27,14 @@ pub enum FsError {
     Io(#[from] std::io::Error),
 }
 
+/// [`read_file_smart`]：单文件，或同目录同 stem 命中多文件时一并读出。
+#[derive(Debug)]
+pub enum SmartReadOutcome {
+    Single(PathBuf, Vec<u8>),
+    /// 相对挂载根路径（`/`）与 UTF-8 文件字节
+    Multi(Vec<(String, Vec<u8>)>),
+}
+
 #[derive(Debug, Serialize)]
 pub struct DirEntryJson {
     pub name: String,
@@ -186,6 +194,122 @@ pub fn read_file_bounded(path: &Path) -> Result<Vec<u8>, FsError> {
     Ok(fs::read(path)?)
 }
 
+/// 相对挂载根的路径变体：原路径 + 若末段无扩展名则追加常见扩展（优先 `.md`）。
+fn candidate_relative_paths(user_path: &str) -> Result<Vec<String>, FsError> {
+    let t = user_path.trim();
+    if t.is_empty() {
+        return Err(FsError::InvalidPath);
+    }
+    let path = Path::new(t);
+    let mut out = vec![t.to_string()];
+    let name = path.file_name().and_then(|s| s.to_str());
+    let Some(name) = name else {
+        return Ok(out);
+    };
+    if !name.contains('.') {
+        for ext in ["md", "markdown", "txt", "mdx", "json"] {
+            let p2 = path.with_extension(ext);
+            out.push(p2.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    Ok(out)
+}
+
+/// 精确与扩展名尝试均失败后：在同目录按 stem（不区分大小写）匹配；多文件则全部读取。
+fn stem_reads_in_parent(
+    roots: &[PathBuf],
+    root_index: usize,
+    user_path: &str,
+) -> Result<SmartReadOutcome, FsError> {
+    let t = user_path.trim();
+    let path = Path::new(t);
+    let parent_rel = path.parent().map_or_else(String::new, |p| {
+        let s = p.to_string_lossy();
+        let ss = s.trim();
+        if ss.is_empty() {
+            String::new()
+        } else {
+            ss.replace('\\', "/")
+        }
+    });
+    let stem_key = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    if stem_key.is_empty() {
+        return Err(FsError::NotFile);
+    }
+    let dir_path = resolve_within_roots_at_index(roots, root_index, &parent_rel)?;
+    if !dir_path.is_dir() {
+        return Err(FsError::NotFile);
+    }
+    let entries = list_dir(&dir_path)?;
+    let mut matches: Vec<String> = Vec::new();
+    for e in entries.iter().filter(|e| !e.is_dir) {
+        let est = Path::new(&e.name)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        if est == stem_key {
+            matches.push(e.name.clone());
+        }
+    }
+    matches.sort();
+    match matches.len() {
+        0 => Err(FsError::NotFile),
+        1 => {
+            let rel_joined = if parent_rel.is_empty() {
+                matches[0].clone()
+            } else {
+                format!("{}/{}", parent_rel.trim_end_matches('/'), matches[0])
+            };
+            let p = resolve_within_roots_at_index_for_write(roots, root_index, &rel_joined)?;
+            let bytes = read_file_bounded(&p)?;
+            Ok(SmartReadOutcome::Single(p, bytes))
+        }
+        _ => {
+            const MAX_MULTI_FILES: usize = 64;
+            let mut out: Vec<(String, Vec<u8>)> = Vec::new();
+            let mut total: u64 = 0;
+            for name in matches.iter().take(MAX_MULTI_FILES) {
+                let rel_joined = if parent_rel.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{}/{}", parent_rel.trim_end_matches('/'), name)
+                };
+                let p = resolve_within_roots_at_index_for_write(roots, root_index, &rel_joined)?;
+                let bytes = read_file_bounded(&p)?;
+                total += bytes.len() as u64;
+                if total > MAX_READ_BYTES.saturating_mul(10) {
+                    return Err(FsError::TooLarge);
+                }
+                out.push((rel_joined, bytes));
+            }
+            Ok(SmartReadOutcome::Multi(out))
+        }
+    }
+}
+
+/// 先按精确路径与常见扩展名尝试；仍失败则在同目录按 stem 匹配（多文件则全部读出）。
+pub fn read_file_smart(
+    roots: &[PathBuf],
+    root_index: usize,
+    user_path: &str,
+) -> Result<SmartReadOutcome, FsError> {
+    let candidates = candidate_relative_paths(user_path)?;
+    for rel in candidates {
+        let p = resolve_within_roots_at_index_for_write(roots, root_index, &rel)?;
+        match read_file_bounded(&p) {
+            Ok(bytes) => return Ok(SmartReadOutcome::Single(p, bytes)),
+            Err(FsError::NotFile) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    stem_reads_in_parent(roots, root_index, user_path)
+}
+
 pub fn write_file(path: &Path, bytes: &[u8], write_confirmed: bool) -> Result<(), FsError> {
     if !write_confirmed {
         return Err(FsError::WriteNotConfirmed);
@@ -265,5 +389,62 @@ mod tests {
         let roots = vec![safe];
         let r = resolve_within_roots_at_index_for_write(&roots, 0, "../evil.txt");
         assert!(matches!(r, Err(FsError::OutsideMounts)));
+    }
+
+    #[test]
+    fn read_file_smart_appends_md_when_no_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        let safe = tmp.path().join("workspace");
+        fs::create_dir_all(&safe).unwrap();
+        let f = safe.join("Plan.md");
+        File::create(&f).unwrap().write_all(b"hello").unwrap();
+        let roots = vec![safe];
+        match read_file_smart(&roots, 0, "Plan").unwrap() {
+            SmartReadOutcome::Single(p, bytes) => {
+                assert!(p.ends_with("Plan.md"));
+                assert_eq!(bytes, b"hello");
+            }
+            _ => panic!("expected single"),
+        }
+    }
+
+    #[test]
+    fn read_file_smart_matches_unique_stem_in_subdir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let safe = tmp.path().join("workspace");
+        fs::create_dir_all(safe.join("docs")).unwrap();
+        let f = safe.join("docs/Only.md");
+        File::create(&f).unwrap().write_all(b"x").unwrap();
+        let roots = vec![safe];
+        match read_file_smart(&roots, 0, "docs/Only").unwrap() {
+            SmartReadOutcome::Single(_, bytes) => assert_eq!(bytes, b"x"),
+            _ => panic!("expected single"),
+        }
+    }
+
+    #[test]
+    fn read_file_smart_reads_all_same_stem_when_extensions_miss() {
+        let tmp = tempfile::tempdir().unwrap();
+        let safe = tmp.path().join("workspace");
+        fs::create_dir_all(safe.join("mix")).unwrap();
+        File::create(safe.join("mix/w.pdf"))
+            .unwrap()
+            .write_all(b"a")
+            .unwrap();
+        File::create(safe.join("mix/w.doc"))
+            .unwrap()
+            .write_all(b"b")
+            .unwrap();
+        let roots = vec![safe];
+        match read_file_smart(&roots, 0, "mix/w").unwrap() {
+            SmartReadOutcome::Multi(parts) => {
+                assert_eq!(parts.len(), 2);
+                let mut keys: Vec<_> = parts.iter().map(|(r, _)| r.as_str()).collect();
+                keys.sort();
+                assert!(keys.iter().any(|k| k.ends_with("w.doc")));
+                assert!(keys.iter().any(|k| k.ends_with("w.pdf")));
+            }
+            _ => panic!("expected multi"),
+        }
     }
 }
