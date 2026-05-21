@@ -354,6 +354,7 @@ pub fn run() {
                     api.prevent_exit();
                     hide_main_window(app_handle);
                 }
+                #[cfg(target_os = "macos")]
                 RunEvent::Reopen { has_visible_windows, .. } => {
                     // macOS：Dock 图标点击时恢复主窗口（窗口已 hide 到托盘后）。
                     if !has_visible_windows {
