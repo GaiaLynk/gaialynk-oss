@@ -46,9 +46,12 @@
 
 ## D. 架构与治理（按需阅读）
 
-10. [CTO 技术栈与基础设施长期规划](./Agent-IM-CTO-Tech-Stack-and-Infrastructure.md)
-11. [ADR-0001: 凭证签名升级到 Ed25519/JWS](./ADR-0001-Receipt-Signing-Upgrade-Ed25519-JWS.md)
-12. [ADR-0002: 审计 Append-Only 与查询增强](./ADR-0002-Audit-Append-Only-and-Query-Enhancement.md)
+10. [与「Task」相关的术语区分](./GaiaLynk-Task-Related-Terminology-v1.md)  
+   - 避免将 JSON-RPC `tasks.run` 与 Task Session、编排/定时、A2A 返回中的 `task` 混为一谈。
+
+11. [CTO 技术栈与基础设施长期规划](./Agent-IM-CTO-Tech-Stack-and-Infrastructure.md)
+12. [ADR-0001: 凭证签名升级到 Ed25519/JWS](./ADR-0001-Receipt-Signing-Upgrade-Ed25519-JWS.md)
+13. [ADR-0002: 审计 Append-Only 与查询增强](./ADR-0002-Audit-Append-Only-and-Query-Enhancement.md)
 
 ---
 

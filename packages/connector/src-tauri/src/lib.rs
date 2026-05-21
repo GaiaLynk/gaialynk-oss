@@ -12,11 +12,23 @@ use std::time::Duration;
 use local_server::{ServerState, SharedState};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::Emitter;
-use tauri::Manager;
+use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tauri::AppHandle;
 
 const DEVICE_SESSION_CHECK_SECS: u64 = 30;
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+fn hide_main_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
+    }
+}
 
 fn spawn_mount_sync_if_linked(snap: config::PersistedConfig) {
     if let Some(tok) = snap.device_token.clone() {
@@ -315,16 +327,10 @@ pub fn run() {
                             app.exit(0);
                         }
                         "show" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                            show_main_window(app);
                         }
                         "check-updates" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                            show_main_window(app);
                             let _ = app.emit("connector-check-updates", ());
                         }
                         _ => {}
@@ -333,6 +339,28 @@ pub fn run() {
                 Ok(())
             },
         )
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app_handle, event| {
+            match event {
+                RunEvent::ExitRequested { api, .. } => {
+                    // Cmd+Q / 任务栏退出等系统退出入口：与窗口关闭一致，收起到托盘而非退出。
+                    api.prevent_exit();
+                    hide_main_window(app_handle);
+                }
+                RunEvent::Reopen { has_visible_windows, .. } => {
+                    // macOS：Dock 图标点击时恢复主窗口（窗口已 hide 到托盘后）。
+                    if !has_visible_windows {
+                        show_main_window(app_handle);
+                    }
+                }
+                _ => {}
+            }
+        });
 }

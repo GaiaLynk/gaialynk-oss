@@ -104,6 +104,18 @@ export const REASON_CODE_USER_FACING: Record<string, UserFacingLocaleBundle> = {
     zhHant: "依本會話的動作權限策略，需要會話管理者核準後，平台才能代表你呼叫此 Agent。",
     en: "Under this conversation's action policy, a conversation manager must approve before the platform can invoke this agent on your behalf.",
   },
+  /** E-101 V1.7.1：未登录用户不得拉 Agent 入会话 */
+  auth_required_for_agent_invite: {
+    zhHans: "邀请 Agent 加入会话前请先登录。",
+    zhHant: "邀請 Agent 加入會話前請先登入。",
+    en: "Sign in before inviting an agent to this conversation.",
+  },
+  /** E-101：匿名只读会话不允许邀请 Agent */
+  anonymous_conversation_agent_forbidden: {
+    zhHans: "当前会话为匿名只读模式，无法邀请 Agent。",
+    zhHant: "目前會話為匿名唯讀模式，無法邀請 Agent。",
+    en: "This conversation is anonymous read-only; agents cannot be invited.",
+  },
   /** E-58: owner_admin_only — caller is not owner or admin participant */
   action_policy_owner_admin_only: {
     zhHans: "你当前没有在此会话调用该 Agent 的权限。",
@@ -245,6 +257,14 @@ export const REASON_CODE_USER_FACING: Record<string, UserFacingLocaleBundle> = {
     zhHans: "兼容路径（compat）宽限期已结束，请升级到 A2A 1.0.0 正式 Card 并提交复检。",
     zhHant: "相容路徑（compat）寬限期已結束，請升級到 A2A 1.0.0 正式 Card 並提交複檢。",
     en: "The compatibility grace period has ended; upgrade to a full A2A 1.0.0 agent card and submit for recheck.",
+  },
+  /** E-107 CTO V1.7.2：google_a2a_v1 SendMessage 须返回合规 `result.task`，禁止仅以 `result.message` 冒充终局完成态 */
+  a2a_response_missing_task: {
+    zhHans:
+      "该 Agent 对 SendMessage 的响应不符合 Task-only（缺少合规 result.task）。请 Provider 返回带 status.state 的 Task。",
+    zhHant:
+      "該 Agent 對 SendMessage 的回應不符合 Task-only（缺少合規 result.task）。請 Provider 回傳帶 status.state 的 Task。",
+    en: "SendMessage response is not Task-compliant (missing a proper result.task with status.state).",
   },
   /** E-49.1 V1.6.2.1: 产品面仅参与者可见 */
   conversation_not_participant: {
@@ -413,6 +433,120 @@ export const REASON_CODE_USER_FACING: Record<string, UserFacingLocaleBundle> = {
     zhHans: "未找到该会话或你无权访问；请确认链接来自最新通知。",
     zhHant: "找不到該會話或你無權存取；請確認連結來自最新通知。",
     en: "Conversation not found or not accessible; confirm the link is from your latest notification.",
+  },
+  /** V1.7.1 W-102：子会话在父下不存在或父子不匹配（主线仅 `error.code`，无 `details.reason_code`） */
+  subconversation_not_found: {
+    zhHans: "在父会话下未找到该子会话，或子会话与父会话不匹配。",
+    zhHant: "在父會話下未找到該子會話，或子會話與父會話不相符。",
+    en: "Subconversation not found under this parent, or the child does not belong to the parent.",
+  },
+  /** W-62 V1.8：Invocation 锚点协作 / 子会话策略与校验 */
+  agent_not_in_parent_conversation: {
+    zhHans: "调用方 Agent 必须先加入父会话，才能创建子会话或邀请外部调用者。",
+    zhHant: "呼叫方 Agent 必須先加入父會話，才能建立子會話或邀請外部呼叫者。",
+    en: "The calling agent must already be in the parent conversation before creating child threads or inviting external callers.",
+  },
+  initiator_agent_not_in_parent: {
+    zhHans: "你选择的发起 Agent 不在父会话中，无法用于创建子会话。",
+    zhHant: "你選擇的發起 Agent 不在父會話中，無法用於建立子會話。",
+    en: "The selected initiator agent is not in the parent conversation and cannot create a child thread.",
+  },
+  agent_initiator_mismatch: {
+    zhHans: "受信 Agent 仅可代表自己创建子会话，不能代替其他 Agent 发起。",
+    zhHant: "受信 Agent 僅可代表自己建立子會話，不能替其他 Agent 發起。",
+    en: "A trusted agent can only create child conversations as itself, not on behalf of another agent.",
+  },
+  child_invite_mode_single_requires_one_agent: {
+    zhHans: "当前策略为单 Agent 邀请模式，每个子会话只能选择一个外部 Agent。",
+    zhHant: "目前策略為單 Agent 邀請模式，每個子會話只能選擇一個外部 Agent。",
+    en: "Current policy is single-external-agent mode; each child conversation can include only one external agent.",
+  },
+  child_create_requires_owner_or_manager: {
+    zhHans: "当前策略下，仅主会话所有者或管理者可以创建子会话。",
+    zhHant: "目前策略下，僅主會話所有者或管理者可以建立子會話。",
+    en: "Under current policy, only the parent conversation owner or managers can create child conversations.",
+  },
+  child_create_requires_human_participant: {
+    zhHans: "当前策略要求创建者必须是该会话中的人类参与者。",
+    zhHant: "目前策略要求建立者必須是該會話中的人類參與者。",
+    en: "Current policy requires the creator to be a human participant in this conversation.",
+  },
+  child_create_policy_agent_only: {
+    zhHans: "当前策略仅允许 Agent 侧发起创建子会话。",
+    zhHant: "目前策略僅允許 Agent 端發起建立子會話。",
+    en: "Current policy allows only agent-side actors to create child conversations.",
+  },
+  child_create_requires_manager_approval: {
+    zhHans: "当前策略要求管理者确认后，Agent 才能创建子会话。",
+    zhHant: "目前策略要求管理者確認後，Agent 才能建立子會話。",
+    en: "Current policy requires manager approval before an agent can create a child conversation.",
+  },
+  child_create_agent_not_allowed: {
+    zhHans: "该 Agent 不在允许创建子会话的名单中。",
+    zhHant: "該 Agent 不在允許建立子會話的名單中。",
+    en: "This agent is not allowed by policy to create child conversations.",
+  },
+  child_create_policy_user_only: {
+    zhHans: "当前策略仅允许人类账号侧创建子会话。",
+    zhHant: "目前策略僅允許人類帳號端建立子會話。",
+    en: "Current policy allows only human accounts to create child conversations.",
+  },
+  external_caller_invite_requires_manager: {
+    zhHans: "当前策略要求由会话管理者（或指定管理者）邀请外部调用者入会。",
+    zhHant: "目前策略要求由會話管理者（或指定管理者）邀請外部呼叫者入會。",
+    en: "Current policy requires a manager (or designated manager) to invite an external caller.",
+  },
+  external_caller_invite_requires_manager_approval: {
+    zhHans: "当前策略下，Agent 邀请外部调用者需要管理者确认。",
+    zhHant: "目前策略下，Agent 邀請外部呼叫者需要管理者確認。",
+    en: "Under current policy, an agent needs manager approval to invite an external caller.",
+  },
+  source_invocation_unavailable: {
+    zhHans: "目标调用实例不存在或已结束，当前不可用于协作邀请。",
+    zhHant: "目標呼叫實例不存在或已結束，目前不可用於協作邀請。",
+    en: "The source invocation does not exist or is completed, so it cannot be used for collaboration invites.",
+  },
+  source_invocation_not_invitable_online: {
+    zhHans: "目标调用实例当前不满足“在线且可邀请且未撤销”条件。",
+    zhHant: "目標呼叫實例目前不符合「在線且可邀請且未撤銷」條件。",
+    en: "The source invocation is not currently online, invitable, and active (not revoked).",
+  },
+  source_invocation_agent_mismatch: {
+    zhHans: "若声明 invited_agent_ids，则必须包含 source invocation 对应的 Agent。",
+    zhHant: "若聲明 invited_agent_ids，則必須包含 source invocation 對應的 Agent。",
+    en: "If you pass invited_agent_ids, it must include the agent bound to the source invocation.",
+  },
+  /** E-113 V1.7.4：浏览器用户路径禁止手工指定被邀 Agent B */
+  invited_agents_forbidden_for_user_actor: {
+    zhHans: "用户侧不能手工指定被邀 Agent；被邀方仅可由 source invocation 解析。",
+    zhHant: "用戶端不能手工指定被邀 Agent；被邀方僅可由 source invocation 解析。",
+    en: "Human clients cannot specify invited agents; the invitee is derived only from the source invocation.",
+  },
+  user_subconversation_requires_source_invocation: {
+    zhHans: "创建子会话须提供有效的 source invocation 锚点。",
+    zhHant: "建立子會話須提供有效的 source invocation 錨點。",
+    en: "Creating a child conversation requires a valid source invocation anchor.",
+  },
+  /** 受信 Agent 无 source 时须显式传 invited_agent_ids */
+  invited_agent_ids_required: {
+    zhHans: "未提供 source invocation 时，须在 invited_agent_ids 中声明被邀 Agent。",
+    zhHant: "未提供 source invocation 時，須在 invited_agent_ids 中聲明被邀 Agent。",
+    en: "Without a source invocation, invited_agent_ids must name the agents to invite.",
+  },
+  invocation_invite_tag_requires_requester: {
+    zhHans: "仅该调用实例的调用者本人可以查看或修改此邀请标签。",
+    zhHant: "僅該呼叫實例的呼叫者本人可以檢視或修改此邀請標籤。",
+    en: "Only the invocation requester can view or update this invite tag.",
+  },
+  invocation_completed_not_invitable: {
+    zhHans: "该调用已结束，不能再标记为“可被 Agent 邀请”。",
+    zhHant: "該呼叫已結束，不能再標記為「可被 Agent 邀請」。",
+    en: "This invocation is completed and can no longer be marked invitable by agents.",
+  },
+  agent_not_in_conversation_for_discovery: {
+    zhHans: "调用方 Agent 必须先在会话中，才能基于该会话执行在线实例发现。",
+    zhHant: "呼叫方 Agent 必須先在會話中，才能基於該會話執行在線實例發現。",
+    en: "The calling agent must already be in the conversation before running discovery scoped to that conversation.",
   },
 };
 
