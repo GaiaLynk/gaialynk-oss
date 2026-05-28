@@ -5,18 +5,47 @@ export {
   type UserFacingLocaleBundle,
 } from "./reason-codes";
 export {
+  PLATFORM_CAPABILITY_RISK_EXACT,
+  PLATFORM_CAPABILITY_RISK_PATTERNS,
+  PLATFORM_UNKNOWN_CAPABILITY_RISK,
+  maxPlatformCapabilityRisk,
+  resolvePlatformCapabilityRisk,
+  type PlatformCapabilityRiskLevel,
+} from "./platform-capability-risk";
+export {
+  matchPlatformActionRedlines,
+  type PlatformRedlineMatch,
+  type PlatformRedlineTier,
+} from "./platform-action-redlines";
+export {
+  PLATFORM_ACTION_KIND_RISK,
+  PLATFORM_ACTION_KINDS,
+  resolvePlatformActionKind,
+  resolvePlatformActionKindRisk,
+  type PlatformActionKind,
+} from "./platform-action-kind";
+export {
   ACTION_STATUS_REASON,
   ACTION_STATUS_USER_MESSAGE,
   buildChangePolicyConversationAction,
   buildConversationActionStatusResponse,
   computeTabHint,
 } from "./action-status-i18n";
+export {
+  labelInvocationCompletedReceipt,
+  labelTrustSafetyAuditActivity,
+  TRUST_SAFETY_AUDIT_EVENT_TYPES,
+  type TrustActivityLabelInput,
+  type TrustSafetyAuditEventType,
+} from "./conversation-activity-trust-labels";
 export type {
   ActionStatusLocaleBundle,
   ActionStatusTabHint,
+  ConversationActivityFocusHint,
   ConversationActionItem,
   ConversationActionStatus,
   ConversationActionStatusResponse,
+  ConversationActivityItem,
   ConversationActionType,
 } from "./types/action-status";
 export {

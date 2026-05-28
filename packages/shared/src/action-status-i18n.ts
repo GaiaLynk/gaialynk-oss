@@ -7,6 +7,7 @@ import type {
   ConversationActionItem,
   ConversationActionStatus,
   ConversationActionStatusResponse,
+  ConversationActivityItem,
 } from "./types/action-status";
 
 const L = (en: string, zhHans: string, zhHant: string): ActionStatusLocaleBundle => ({ en, zhHans, zhHant });
@@ -115,7 +116,7 @@ function actionsFor(
         },
         {
           action_type: "view_detail",
-          label: L("View details", "查看详情", "查看詳情"),
+          label: L("View recent activity", "查看最近活动", "查看最近活動"),
           endpoint: `/api/v1/conversations/${conversationId}`,
           params: { method: "GET" },
         },
@@ -309,6 +310,7 @@ export function buildConversationActionStatusResponse(input: {
   conversationId: string;
   invocationId?: string;
   receiptRefs?: string[];
+  activityItems?: ConversationActivityItem[];
   extraActions?: ConversationActionItem[];
 }): ConversationActionStatusResponse {
   const actions = [
@@ -323,6 +325,7 @@ export function buildConversationActionStatusResponse(input: {
     reason,
     actions,
     ...(input.receiptRefs && input.receiptRefs.length > 0 ? { receipt_refs: input.receiptRefs } : {}),
+    activity_items: input.activityItems ?? [],
     tab_hint,
   };
 }

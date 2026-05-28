@@ -42,6 +42,81 @@ export const REASON_CODE_USER_FACING: Record<string, UserFacingLocaleBundle> = {
     zhHant: "該操作風險較高，需要您確認後才能繼續。",
     en: "This action is high risk and requires your confirmation before it can proceed.",
   },
+  risk_medium_requires_confirmation: {
+    zhHans: "该操作涉及敏感能力或上下文，需要您确认后才能继续。",
+    zhHant: "該操作涉及敏感能力或上下文，需要您確認後才能繼續。",
+    en: "This action involves sensitive capability or context and requires your confirmation before it can proceed.",
+  },
+  platform_capability_risk_floor_applied: {
+    zhHans: "平台能力目录判定该能力风险高于 Provider 声明，已按平台标准评估。",
+    zhHant: "平台能力目錄判定該能力風險高於 Provider 聲明，已按平台標準評估。",
+    en: "Platform capability catalog rated this capability higher than the provider declaration; platform policy applies.",
+  },
+  reviewed_max_risk_elevated: {
+    zhHans: "审核认定的能力风险上限高于声明值，已纳入本次评估。",
+    zhHant: "審核認定的能力風險上限高於聲明值，已納入本次評估。",
+    en: "Reviewed capability risk ceiling exceeds declared level and was applied to this evaluation.",
+  },
+  action_intent_elevated_risk: {
+    zhHans: "本次请求内容触发平台动作意图规则，风险等级已上调。",
+    zhHant: "本次請求內容觸發平台動作意圖規則，風險等級已上調。",
+    en: "This request matched platform action-intent rules; effective risk was elevated.",
+  },
+  action_kind_elevated_risk: {
+    zhHans: "本次结构化动作类型（ActionKind）的风险高于默认档位，已纳入评估。",
+    zhHant: "本次結構化動作類型（ActionKind）的風險高於預設檔位，已納入評估。",
+    en: "Structured action kind (ActionKind) raised effective risk above the default tier.",
+  },
+  agent_posture_reputation_floor: {
+    zhHans: "该 Agent 信誉档位较低，平台对本次调用采取更审慎策略。",
+    zhHant: "該 Agent 信譽檔位較低，平台對本次呼叫採取更審慎策略。",
+    en: "This agent’s reputation tier is low; the platform applied a stricter posture for this call.",
+  },
+  agent_posture_hub_not_ready: {
+    zhHans: "该 Agent 尚未达到 Hub 默认可用姿态，本次调用需额外确认。",
+    zhHant: "該 Agent 尚未達到 Hub 預設可用姿態，本次呼叫需額外確認。",
+    en: "This agent is not in the hub default-ready posture; extra confirmation applies.",
+  },
+  agent_posture_card_security_failed: {
+    zhHans: "Agent Card 存在未通过的安全校验项，平台提高了本次调用风险。",
+    zhHant: "Agent Card 存在未通過的安全校驗項，平台提高了本次呼叫風險。",
+    en: "Agent card has open security check failures; platform elevated risk for this call.",
+  },
+  platform_redline_matched: {
+    zhHans: "本次内容命中平台红线规则。",
+    zhHant: "本次內容命中平台紅線規則。",
+    en: "This content matched a platform redline rule.",
+  },
+  action_yellow_line_audited: {
+    zhHans: "本次命中黄线规则：受限放行并已记入审计，无需逐次确认。",
+    zhHant: "本次命中黃線規則：受限放行並已記入稽核，無需逐次確認。",
+    en: "Yellow-line rule matched: allowed with limits and audit logging (no per-call confirmation).",
+  },
+  platform_redline_destructive: {
+    zhHans: "检测到破坏性操作意图，已按红线策略拦截。",
+    zhHant: "偵測到破壞性操作意圖，已按紅線策略攔截。",
+    en: "Destructive operation intent detected; blocked by redline policy.",
+  },
+  platform_redline_untrusted_download_pipe: {
+    zhHans: "检测到不受信任的下载管道执行模式，已拦截。",
+    zhHant: "偵測到不受信任的下載管道執行模式，已攔截。",
+    en: "Untrusted download-and-pipe execution pattern detected; blocked.",
+  },
+  platform_yellow_container_ops: {
+    zhHans: "涉及容器类操作（黄线），将受限放行并审计。",
+    zhHant: "涉及容器類操作（黃線），將受限放行並稽核。",
+    en: "Container-related operation (yellow line): allowed with limits and audit.",
+  },
+  platform_yellow_privilege_escalation: {
+    zhHans: "涉及提权类操作（黄线），将受限放行并审计。",
+    zhHant: "涉及提權類操作（黃線），將受限放行並稽核。",
+    en: "Privilege-escalation pattern (yellow line): allowed with limits and audit.",
+  },
+  platform_yellow_scheduled_task: {
+    zhHans: "涉及计划任务类操作（黄线），将受限放行并审计。",
+    zhHant: "涉及計劃任務類操作（黃線），將受限放行並稽核。",
+    en: "Scheduled-task pattern (yellow line): allowed with limits and audit.",
+  },
   identity_verified: {
     zhHans: "身份校验已通过。",
     zhHant: "身分校驗已通過。",
@@ -547,6 +622,38 @@ export const REASON_CODE_USER_FACING: Record<string, UserFacingLocaleBundle> = {
     zhHans: "调用方 Agent 必须先在会话中，才能基于该会话执行在线实例发现。",
     zhHant: "呼叫方 Agent 必須先在會話中，才能基於該會話執行在線實例發現。",
     en: "The calling agent must already be in the conversation before running discovery scoped to that conversation.",
+  },
+  /** E-124 (V1.7.5.3)：平台 capability gap 协助触发 */
+  assistance_capability_gap_detected: {
+    zhHans: "当前任务所需能力不在主 Agent 能力范围内，平台建议临时协助。",
+    zhHant: "目前任務所需能力不在主 Agent 能力範圍內，平台建議臨時協助。",
+    en: "Required capabilities are outside the primary agent; the platform is offering temporary assistance.",
+  },
+  assistance_gap_no_candidate: {
+    zhHans: "检测到能力缺口，但目录中暂无匹配合适的协助 Agent。",
+    zhHant: "偵測到能力缺口，但目錄中暫無匹配合適的協助 Agent。",
+    en: "A capability gap was detected but no suitable assisting agent is available in the directory.",
+  },
+  assistance_not_declared: {
+    zhHans: "该 Agent 未声明可请求临时协助，平台不会主动发起协助。",
+    zhHant: "該 Agent 未聲明可請求臨時協助，平台不會主動發起協助。",
+    en: "This agent has not declared that it may request assistance; the platform will not offer help proactively.",
+  },
+  assistance_trigger_platform_gap: {
+    zhHans: "平台根据能力缺口发起临时协助请求。",
+    zhHant: "平台根據能力缺口發起臨時協助請求。",
+    en: "Temporary assistance was triggered by a platform capability gap check.",
+  },
+  /** E-125 (V1.7.5.3)：结构化 Agent escalate 触发 */
+  assistance_trigger_agent_escalate: {
+    zhHans: "主 Agent 在可审计证据下请求临时协助。",
+    zhHant: "主 Agent 在可稽核證據下請求臨時協助。",
+    en: "The primary agent requested temporary assistance with auditable evidence.",
+  },
+  assistance_escalate_evidence_missing: {
+    zhHans: "协助升级请求缺少平台要求的审计证据，已拒绝。",
+    zhHant: "協助升級請求缺少平台要求的稽核證據，已拒絕。",
+    en: "The assistance escalation lacked required audit evidence and was rejected.",
   },
 };
 

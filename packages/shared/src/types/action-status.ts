@@ -58,5 +58,23 @@ export interface ConversationActionStatusResponse {
   reason: ActionStatusLocaleBundle;
   actions: ConversationActionItem[];
   receipt_refs?: string[];
+  /** Merged user-visible activity (receipts + collaboration audit events), newest first. */
+  activity_items: ConversationActivityItem[];
   tab_hint: ActionStatusTabHint;
 }
+
+export type ConversationActivityFocusHint = "trust_card" | "receipt";
+
+/** User-facing row in the Safety & activity tab (receipt or audit-backed). */
+export type ConversationActivityItem = {
+  id: string;
+  source: "receipt" | "audit";
+  occurred_at: string;
+  /** receipt_type or audit event_type */
+  type: string;
+  label: ActionStatusLocaleBundle;
+  receipt_id?: string;
+  /** When set with focus_hint=trust_card, client may deep-link to the Trust review card. */
+  invocation_id?: string;
+  focus_hint?: ConversationActivityFocusHint;
+};
