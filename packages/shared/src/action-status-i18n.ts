@@ -294,12 +294,9 @@ export function buildChangePolicyConversationAction(): ConversationActionItem {
 }
 
 
-export function computeTabHint(status: ConversationActionStatus, actions: ConversationActionItem[]): ActionStatusTabHint {
+export function computeTabHint(status: ConversationActionStatus, _actions: ConversationActionItem[]): ActionStatusTabHint {
   if (status === "needs_confirmation" || status.startsWith("blocked_")) {
     return "trust_receipt";
-  }
-  if (actions.some((a) => String(a.action_type).startsWith("connector_"))) {
-    return "connector_actions";
   }
   return "session_status";
 }

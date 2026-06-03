@@ -187,75 +187,88 @@ async fn remove_mount_at_index(
     Ok(())
 }
 
+async fn apply_completed_pairing(
+    shared: &SharedState,
+    app: &AppHandle,
+    body: pairing::PairStatusBody,
+) -> bool {
+    if !body.status.eq_ignore_ascii_case("completed") {
+        return false;
+    }
+    let Some(t) = body.device_token else {
+        return false;
+    };
+    let Some(s) = body.device_secret else {
+        return false;
+    };
+    let Some(id) = body.device_id else {
+        return false;
+    };
+    let mut st = shared.write().await;
+    st.config.device_token = Some(t);
+    st.config.device_secret = Some(s);
+    st.config.device_id = Some(id);
+    let save_ok = config::save(&st.config).is_ok();
+    let snap = st.config.clone();
+    drop(st);
+    if save_ok {
+        let _ = app.emit("connector-pairing-state", true);
+        spawn_mount_sync_if_linked(snap);
+        true
+    } else {
+        false
+    }
+}
+
 async fn pairing_poll_loop(shared: SharedState, app: AppHandle) {
     let client = reqwest::Client::new();
+    let mut session_check_at = std::time::Instant::now()
+        .checked_sub(Duration::from_secs(DEVICE_SESSION_CHECK_SECS))
+        .unwrap_or_else(std::time::Instant::now);
+
     loop {
-        let token_snapshot = {
+        let (code, base, token_opt) = {
             let st = shared.read().await;
-            st.config.device_token.clone()
+            (
+                st.config.pairing_code.clone(),
+                st.config.mainline_base_url.clone(),
+                st.config.device_token.clone(),
+            )
         };
 
-        if let Some(token) = token_snapshot {
-            let base = {
-                let st = shared.read().await;
-                st.config.mainline_base_url.clone()
-            };
-            // 先请求再间隔：重启后首轮立即刷新主网 last_seen，避免官网 2 分钟在线窗口内长时间显示「离线」。
-            match pairing::fetch_device_session_active(&client, &base, &token).await {
-                Ok(true) => {}
-                Ok(false) => {
-                    let cleared = {
-                        let mut st = shared.write().await;
-                        if st.config.device_token.as_ref() == Some(&token) {
-                            st.config.device_token = None;
-                            st.config.device_secret = None;
-                            st.config.device_id = None;
-                            config::save(&st.config).is_ok()
-                        } else {
-                            false
+        // 始终轮询 pair-status：Web 登记 pending 后须由桌面确认同一配对码。
+        // 若本地仍保留旧 device_token，旧逻辑会只做 session 校验而永远不再 poll，导致 Web 长期「等待应用」。
+        if let Ok(body) = pairing::fetch_pair_status(&client, &base, &code).await {
+            let _ = apply_completed_pairing(&shared, &app, body).await;
+        }
+
+        if let Some(token) = token_opt {
+            if session_check_at.elapsed() >= Duration::from_secs(DEVICE_SESSION_CHECK_SECS) {
+                session_check_at = std::time::Instant::now();
+                match pairing::fetch_device_session_active(&client, &base, &token).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        let cleared = {
+                            let mut st = shared.write().await;
+                            if st.config.device_token.as_ref() == Some(&token) {
+                                st.config.device_token = None;
+                                st.config.device_secret = None;
+                                st.config.device_id = None;
+                                config::save(&st.config).is_ok()
+                            } else {
+                                false
+                            }
+                        };
+                        if cleared {
+                            let _ = app.emit("connector-pairing-state", false);
                         }
-                    };
-                    if cleared {
-                        let _ = app.emit("connector-pairing-state", false);
                     }
+                    Err(_) => { /* 网络故障：保留 token；pair-status 已在上方尝试过 */ }
                 }
-                Err(_) => { /* 网络故障：保留 token，下次再试 */ }
             }
-            tokio::time::sleep(Duration::from_secs(DEVICE_SESSION_CHECK_SECS)).await;
-            continue;
         }
 
         tokio::time::sleep(Duration::from_secs(2)).await;
-        let (code, base) = {
-            let st = shared.read().await;
-            (st.config.pairing_code.clone(), st.config.mainline_base_url.clone())
-        };
-        let Ok(body) = pairing::fetch_pair_status(&client, &base, &code).await else {
-            continue;
-        };
-        if !body.status.eq_ignore_ascii_case("completed") {
-            continue;
-        }
-        let Some(t) = body.device_token else {
-            continue;
-        };
-        let Some(s) = body.device_secret else {
-            continue;
-        };
-        let Some(id) = body.device_id else {
-            continue;
-        };
-        let mut st = shared.write().await;
-        st.config.device_token = Some(t);
-        st.config.device_secret = Some(s);
-        st.config.device_id = Some(id);
-        let save_ok = config::save(&st.config).is_ok();
-        let snap = st.config.clone();
-        drop(st);
-        if save_ok {
-            let _ = app.emit("connector-pairing-state", true);
-            spawn_mount_sync_if_linked(snap);
-        }
     }
 }
 

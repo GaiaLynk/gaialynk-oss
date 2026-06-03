@@ -333,6 +333,68 @@ export const REASON_CODE_USER_FACING: Record<string, UserFacingLocaleBundle> = {
     zhHant: "相容路徑（compat）寬限期已結束，請升級到 A2A 1.0.0 正式 Card 並提交複檢。",
     en: "The compatibility grace period has ended; upgrade to a full A2A 1.0.0 agent card and submit for recheck.",
   },
+  /** E-1763-A CTO V1.7.6.3：Provider 未实现 JSON-RPC `CancelTask` */
+  a2a_cancel_task_unsupported: {
+    zhHans: "该 Agent 未实现远端任务取消（CancelTask），请在 Provider 侧补齐 A2A 能力或等待任务自然结束。",
+    zhHant: "該 Agent 未實作遠端任務取消（CancelTask），請在 Provider 側補齊 A2A 能力或等待任務自然結束。",
+    en: "This agent does not support remote task cancellation (CancelTask). Ask the provider to implement it or wait for the task to finish.",
+  },
+  /** E-1763-D CTO V1.7.6.3：Agent Card 声明 OAuth2 implicit/password 等已废弃 flow */
+  a2a_oauth_deprecated_flows_detected: {
+    zhHans:
+      "Agent Card 使用了已废弃的 OAuth2 flow（如 implicit、password）。请改用 authorizationCode、deviceCode 或 clientCredentials，并更新 securitySchemes。",
+    zhHant:
+      "Agent Card 使用了已廢棄的 OAuth2 flow（如 implicit、password）。請改用 authorizationCode、deviceCode 或 clientCredentials，並更新 securitySchemes。",
+    en: "This Agent Card declares deprecated OAuth2 flows (e.g. implicit, password). Switch to authorizationCode, deviceCode, or clientCredentials and update securitySchemes.",
+  },
+  /** E-1764-B CTO V1.7.6.4：注册时须显式传入 context_mode */
+  context_mode_required: {
+    zhHans: "注册 Agent 时必须显式选择 context_mode（platform_managed 或 provider_managed）。",
+    zhHant: "註冊 Agent 時必須顯式選擇 context_mode（platform_managed 或 provider_managed）。",
+    en: "You must explicitly set context_mode (platform_managed or provider_managed) when registering an agent.",
+  },
+  /** E-1764-B：选择 provider_managed 须二次确认 */
+  provider_managed_confirmation_required: {
+    zhHans:
+      "选择 provider_managed 须确认你已自管多轮会话上下文；请传 provider_managed_confirmed=true 后再提交。",
+    zhHant:
+      "選擇 provider_managed 須確認你已自管多輪會話上下文；請傳 provider_managed_confirmed=true 後再提交。",
+    en: "provider_managed requires acknowledging that you own multi-turn context; set provider_managed_confirmed=true.",
+  },
+  /** E-1764-A CTO V1.7.6.4：注册预检硬约束 — SendMessage 非 Task-only */
+  provider_gating_sendmessage_task_noncompliant: {
+    zhHans:
+      "SendMessage 响应不符合 Task-only（须返回带 status.state 的 result.task）。请按 Provider 适配指南修复后再提交审核。",
+    zhHant:
+      "SendMessage 回應不符合 Task-only（須回傳帶 status.state 的 result.task）。請按 Provider 適配指南修復後再提交審核。",
+    en: "SendMessage is not Task-only compliant (result.task with status.state required). Fix before submitting for review.",
+  },
+  /** E-1764-A CTO V1.7.6.4：异步/长任务场景须实现 CancelTask */
+  provider_gating_cancel_task_required: {
+    zhHans:
+      "该 Agent 属于异步/长任务场景，但未实现 CancelTask。请实现 JSON-RPC CancelTask 后再提交审核。",
+    zhHant:
+      "該 Agent 屬於非同步/長任務場景，但未實作 CancelTask。請實作 JSON-RPC CancelTask 後再提交審核。",
+    en: "This agent runs async or long tasks but does not implement CancelTask. Add JSON-RPC CancelTask before review submission.",
+  },
+  /** E-1764-A CTO V1.7.6.4：软约束 — 建议声明 Extended Agent Card */
+  provider_gating_extended_card_missing: {
+    zhHans: "建议在 Agent Card 中声明 extendedAgentCard 能力并完成扩展卡拉取，以提升审核与运维可见性。",
+    zhHant: "建議在 Agent Card 中宣告 extendedAgentCard 能力並完成擴展卡拉取，以提升審核與維運可見性。",
+    en: "Consider declaring extendedAgentCard on your Agent Card and enabling extended card fetch for better review visibility.",
+  },
+  /** E-1764-A CTO V1.7.6.4：软约束 — Extended Agent Card 拉取失败 */
+  provider_gating_extended_card_fetch_failed: {
+    zhHans: "扩展 Agent Card 拉取失败，不影响继续提交，但建议修复 GetExtendedAgentCard 后再上架。",
+    zhHant: "擴展 Agent Card 拉取失敗，不影響繼續提交，但建議修復 GetExtendedAgentCard 後再上架。",
+    en: "Extended Agent Card fetch failed. You may still submit, but fix GetExtendedAgentCard before going live.",
+  },
+  /** E-1764-A CTO V1.7.6.4：软约束 — Rich Part 未验证 */
+  provider_gating_rich_part_missing: {
+    zhHans: "建议在 SendMessage 响应中支持 DataPart/FilePart（Rich Part），以便会话展示结构化结果。",
+    zhHant: "建議在 SendMessage 回應中支援 DataPart/FilePart（Rich Part），以便會話展示結構化結果。",
+    en: "Consider returning DataPart/FilePart (Rich Part) in SendMessage responses for structured session output.",
+  },
   /** E-107 CTO V1.7.2：google_a2a_v1 SendMessage 须返回合规 `result.task`，禁止仅以 `result.message` 冒充终局完成态 */
   a2a_response_missing_task: {
     zhHans:

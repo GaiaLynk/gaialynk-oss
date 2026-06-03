@@ -63,17 +63,19 @@ export interface ConversationActionStatusResponse {
   tab_hint: ActionStatusTabHint;
 }
 
-export type ConversationActivityFocusHint = "trust_card" | "receipt";
+export type ConversationActivityFocusHint = "trust_card" | "receipt" | "connector_receipt";
 
 /** User-facing row in the Safety & activity tab (receipt or audit-backed). */
 export type ConversationActivityItem = {
   id: string;
-  source: "receipt" | "audit";
+  source: "receipt" | "audit" | "connector";
   occurred_at: string;
-  /** receipt_type or audit event_type */
+  /** receipt_type or audit event_type or connector action */
   type: string;
   label: ActionStatusLocaleBundle;
   receipt_id?: string;
+  /** External connector receipt id (cloud/desktop connector action). */
+  connector_receipt_id?: string;
   /** When set with focus_hint=trust_card, client may deep-link to the Trust review card. */
   invocation_id?: string;
   focus_hint?: ConversationActivityFocusHint;

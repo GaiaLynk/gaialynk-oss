@@ -102,18 +102,33 @@ export {
   A2A_CARD_FAILED_CHECK_SIGNATURE_INVALID,
   A2A_CARD_FAILED_CHECK_SIGNATURES_MALFORMED,
   A2A_CARD_FAILED_CHECK_SIGNATURE_UNVERIFIED,
+  A2A_CARD_FAILED_CHECK_OAUTH_DEPRECATED_FLOWS,
   A2A_CARD_SECURITY_CHECKLIST_IDS,
   A2A_CARD_SECURITY_REVIEW_POLICY_VERSION,
+  A2A_OAUTH_DEPRECATED_FLOW_KEYS,
+  A2A_OAUTH_RECOMMENDED_FLOW_KEYS,
   type A2aCardSecuritySchemeKind,
   type A2aCardSecurityState,
   type A2aCardSignatureVerificationStatus,
   type CardSecurityReviewHints,
 } from "./a2a-card-security";
 export {
+  A2A_RICH_PART_ONLY_PLACEHOLDER,
+  hasA2aStructuredAttachments,
+  type A2aDataPartAttachment,
+  type A2aFilePartAttachment,
+  type A2aStructuredAttachments,
+} from "./a2a-rich-parts";
+export {
   AGENT_CONTEXT_MODE_DEFAULT,
+  CONTEXT_MODE_REQUIRED_ERROR_CODE,
+  PROVIDER_MANAGED_CONFIRMATION_REQUIRED_ERROR_CODE,
   normalizeAgentContextMode,
   parseAgentContextMode,
+  validateRegisterContextModeContract,
   type AgentContextMode,
+  type RegisterContextModeBody,
+  type RegisterContextModeValidationErrorCode,
 } from "./context-mode";
 export {
   collaborationPolicyEqualsPlatformDefaultV1,
@@ -137,3 +152,33 @@ export {
   type OrchestrationNarrationLocale,
   type OrchestrationNarrationTemplatesForLocale,
 } from "./orchestration-narration-templates";
+export {
+  PROVIDER_GATING_ENGINE_VERSION,
+  PROVIDER_GATING_REASON_CANCEL_TASK_REQUIRED,
+  PROVIDER_GATING_REASON_EXTENDED_CARD_FETCH_FAILED,
+  PROVIDER_GATING_REASON_EXTENDED_CARD_MISSING,
+  PROVIDER_GATING_REASON_RICH_PART_MISSING,
+  PROVIDER_GATING_REASON_SENDMESSAGE_TASK_NONCOMPLIANT,
+  buildProviderGatingResult,
+  type ProviderGatingCheck,
+  type ProviderGatingResult,
+  type ProviderGatingSeverity,
+} from "./provider-gating";
+export {
+  PROVIDER_RISK_DASHBOARD_VERSION,
+  PROVIDER_RISK_PRIORITY_ORDER,
+  buildProviderRiskFixEntry,
+  compareProviderRiskPriority,
+  gatingCheckToRiskQueueItem,
+  mapGatingSeverityToPriority,
+  maxProviderRiskPriority,
+  type ProviderRiskAgentSummary,
+  type ProviderRiskBlockingCounts,
+  type ProviderRiskDashboard,
+  type ProviderRiskFixEntry,
+  type ProviderRiskFixEntryKind,
+  type ProviderRiskHealthOverview,
+  type ProviderRiskMetrics24h,
+  type ProviderRiskPriority,
+  type ProviderRiskQueueItem,
+} from "./provider-risk-dashboard";

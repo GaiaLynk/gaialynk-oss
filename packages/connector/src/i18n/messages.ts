@@ -55,7 +55,7 @@ const en: Messages = {
   statusConnected: "Paired with your account",
   statusWaiting: "Waiting for pairing",
   hintPairingStuckHtml:
-    "If you already submitted the code in the web app but stay here, set <strong>mainline API base URL</strong> below (production is usually <code>https://api.gaialynk.com</code>), not the marketing homepage.",
+    "If you already submitted the code in the web app but stay here, set <strong>mainline API base URL</strong> below (production is usually <code>https://api.gaialynk.com</code>), not the marketing homepage. If the web shows “Awaiting app” while this app says paired, tap <strong>Regenerate code</strong> below, then submit the new code on the web again.",
   pairingCodeLabelHtml: "<strong>Pairing code</strong> (6 digits — enter in web Settings → Connectors)",
   btnRegenerateCode: "Regenerate code",
   btnCopyCode: "Copy code",
@@ -120,7 +120,7 @@ const zhHans: Messages = {
   statusConnected: "已与账号配对",
   statusWaiting: "等待配对",
   hintPairingStuckHtml:
-    "若在 Web 已提交配对码仍停在本页，请确认下方主网为<strong> API 根地址</strong>（生产一般为 <code>https://api.gaialynk.com</code>），勿填官网首页。",
+    "若在 Web 已提交配对码仍停在本页，请确认下方主网为<strong> API 根地址</strong>（生产一般为 <code>https://api.gaialynk.com</code>），勿填官网首页。若 Web 显示「等待应用」而本应用显示已配对，请点下方<strong>重新生成配对码</strong>，再到 Web 重新提交新码。",
   pairingCodeLabelHtml: "<strong>配对码</strong>（6 位，请在 Web 设置 → 连接器中输入）",
   btnRegenerateCode: "重新生成配对码",
   btnCopyCode: "复制配对码",
@@ -182,7 +182,7 @@ const zhHant: Messages = {
   statusConnected: "已與帳號配對",
   statusWaiting: "等待配對",
   hintPairingStuckHtml:
-    "若已在 Web 送出配對碼仍停在本頁，請確認下方主網為<strong> API 根網址</strong>（生產一般為 <code>https://api.gaialynk.com</code>），勿填官網首頁。",
+    "若已在 Web 送出配對碼仍停在本頁，請確認下方主網為<strong> API 根網址</strong>（生產一般為 <code>https://api.gaialynk.com</code>），勿填官網首頁。若 Web 顯示「等待應用」而本應用顯示已配對，請點下方<strong>重新產生配對碼</strong>，再到 Web 重新提交新碼。",
   pairingCodeLabelHtml: "<strong>配對碼</strong>（6 位，請在 Web 設定 → 連接器中輸入）",
   btnRegenerateCode: "重新產生配對碼",
   btnCopyCode: "複製配對碼",
