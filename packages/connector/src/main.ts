@@ -23,6 +23,8 @@ const UPDATER_LOG = "[GaiaLynk Connector updater]";
 let activeLocale: Locale = resolveInitialLocale();
 let updateCheckInFlight = false;
 let trayUpdateListenerRegistered = false;
+let advancedOpen = false;
+let appVersion = "";
 
 function applyChromeLocale(locale: Locale): void {
   document.documentElement.lang = locale;
@@ -33,12 +35,52 @@ async function refresh(): Promise<StatusPayload> {
   return invoke<StatusPayload>("get_status");
 }
 
+async function resolveAppVersion(): Promise<string> {
+  if (appVersion) return appVersion;
+  try {
+    const { getVersion } = await import("@tauri-apps/api/app");
+    appVersion = await getVersion();
+  } catch {
+    appVersion = "";
+  }
+  return appVersion;
+}
+
 function el(html: string): HTMLElement {
   const t = document.createElement("template");
   t.innerHTML = html.trim();
   const n = t.content.firstElementChild;
   if (!n || !(n instanceof HTMLElement)) throw new Error("template");
   return n;
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function showToast(message: string, kind: "ok" | "err" = "ok"): void {
+  let root = document.getElementById("toast-root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "toast-root";
+    root.className = "toast-root";
+    root.setAttribute("aria-live", "polite");
+    document.body.appendChild(root);
+  }
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${kind}`;
+  toast.textContent = message;
+  root.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("toast-show"));
+  window.setTimeout(() => {
+    toast.classList.remove("toast-show");
+    window.setTimeout(() => toast.remove(), 220);
+  }, 2200);
+}
+
+function syncAdvancedOpenFromDom(): void {
+  const details = document.getElementById("advanced-details") as HTMLDetailsElement | null;
+  if (details) advancedOpen = details.open;
 }
 
 function setUpdateProgressBar(mode: "hidden" | "indeterminate" | "determinate", valuePct?: number): void {
@@ -53,16 +95,15 @@ function setUpdateProgressBar(mode: "hidden" | "indeterminate" | "determinate", 
   if (mode === "indeterminate") {
     bar.removeAttribute("value");
   } else {
-    const v = Math.min(100, Math.max(0, valuePct ?? 0));
-    bar.value = v;
+    bar.value = Math.min(100, Math.max(0, valuePct ?? 0));
   }
 }
 
 function setUpdateCheckFeedback(text: string, cls: string, progress?: "indeterminate" | number): void {
-  const el = document.getElementById("update-check-feedback");
-  if (!el) return;
-  el.textContent = text;
-  el.className = `feedback ${cls}`.trim();
+  const fb = document.getElementById("update-check-feedback");
+  if (!fb) return;
+  fb.textContent = text;
+  fb.className = `feedback ${cls}`.trim();
   if (progress === undefined) {
     setUpdateProgressBar("hidden");
   } else if (progress === "indeterminate") {
@@ -73,22 +114,18 @@ function setUpdateCheckFeedback(text: string, cls: string, progress?: "indetermi
 }
 
 function clearUpdateCheckFeedback(): void {
-  const el = document.getElementById("update-check-feedback");
-  if (!el) return;
-  el.textContent = "";
-  el.className = "feedback";
+  const fb = document.getElementById("update-check-feedback");
+  if (!fb) return;
+  fb.textContent = "";
+  fb.className = "feedback";
   setUpdateProgressBar("hidden");
 }
 
-/**
- * @param userInitiated 为 true 时在检查阶段展示「正在检查」等；为 false 时启动静默检查（无检查阶段 UI）。用户确认下载后两种路径均显示下载/安装进度。
- */
 async function runUpdateCheck(userInitiated: boolean): Promise<void> {
   if (updateCheckInFlight) return;
   updateCheckInFlight = true;
   const m = getMessages(activeLocale);
   const btn = (): HTMLElement | null => document.getElementById("btn-check-updates");
-  /** 用户确认下载后为 true，与 userInitiated 无关，用于下载/安装进度与失败提示 */
   let showDownloadProgressUi = false;
   try {
     if (userInitiated) {
@@ -103,15 +140,13 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
     }
     if (!update) {
       if (userInitiated) {
-        const { getVersion } = await import("@tauri-apps/api/app");
-        window.alert(m.updateUpToDate(await getVersion()));
+        window.alert(m.updateUpToDate(await resolveAppVersion()));
       } else {
         console.info(UPDATER_LOG, "No update available at startup.");
       }
       return;
     }
-    const msg = m.updateAvailable(update.version, update.currentVersion);
-    const ok = window.confirm(msg);
+    const ok = window.confirm(m.updateAvailable(update.version, update.currentVersion));
     if (!ok) {
       await update.close();
       return;
@@ -131,11 +166,11 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
           case "Started":
             contentLength = ev.data.contentLength ?? 0;
             if (showDownloadProgressUi) {
-              if (contentLength > 0) {
-                setUpdateCheckFeedback(m.updateDownloading, "pending", 0);
-              } else {
-                setUpdateCheckFeedback(m.updateDownloading, "pending", "indeterminate");
-              }
+              setUpdateCheckFeedback(
+                m.updateDownloading,
+                "pending",
+                contentLength > 0 ? 0 : "indeterminate",
+              );
             }
             break;
           case "Progress":
@@ -179,10 +214,7 @@ async function runUpdateCheck(userInitiated: boolean): Promise<void> {
       btn()?.toggleAttribute("disabled", false);
       window.alert(m.updateCheckFailed(detail));
     } else {
-      console.warn(
-        UPDATER_LOG,
-        "Startup check failed silently. Open the window and tap「检查更新 / Check for updates」, or see DevTools console (if enabled).",
-      );
+      console.warn(UPDATER_LOG, "Startup check failed silently.");
     }
   } finally {
     updateCheckInFlight = false;
@@ -202,7 +234,6 @@ async function registerTrayUpdateListener(): Promise<void> {
   }
 }
 
-/** 配对完成或主网判定设备已解绑时由 Rust 侧 emit，刷新「已连接 / 等待配对」等状态。 */
 async function registerPairingStateListener(): Promise<void> {
   try {
     const { listen } = await import("@tauri-apps/api/event");
@@ -214,7 +245,6 @@ async function registerPairingStateListener(): Promise<void> {
   }
 }
 
-/** 托盘菜单文案与界面语言对齐，并写入本地 config.json（`ui_locale`）。 */
 async function syncTrayLocale(locale: Locale): Promise<void> {
   try {
     await invoke("set_ui_locale", { locale });
@@ -223,7 +253,26 @@ async function syncTrayLocale(locale: Locale): Promise<void> {
   }
 }
 
+function localeOptionLabel(m: ReturnType<typeof getMessages>, loc: Locale): string {
+  if (loc === "en") return m.langOptionEn;
+  if (loc === "zh-Hans") return m.langOptionZhHans;
+  return m.langOptionZhHant;
+}
+
+function renderMountsList(roots: string[], m: ReturnType<typeof getMessages>): string {
+  if (roots.length === 0) {
+    return `<p class="mount-empty">${escapeAttr(m.mountsEmpty)}</p>`;
+  }
+  return `<ul id="roots" class="roots-list">${roots
+    .map(
+      (r, idx) =>
+        `<li class="mount-row"><span class="mount-path" title="${escapeAttr(r)}">${escapeAttr(r)}</span><button type="button" class="btn-remove-mount btn-secondary" data-mount-index="${idx}">${escapeAttr(m.btnRemoveMount)}</button></li>`,
+    )
+    .join("")}</ul>`;
+}
+
 async function render() {
+  syncAdvancedOpenFromDom();
   const root = document.getElementById("app");
   if (!root) return;
   const m = getMessages(activeLocale);
@@ -233,67 +282,82 @@ async function render() {
   });
   if (!s) return;
 
+  const version = await resolveAppVersion();
+  const statusClass = s.connected ? "status-pill--connected" : "status-pill--waiting";
+  const statusLabel = s.connected ? m.statusConnected : m.statusWaiting;
+  const codeClass = s.connected ? "code code--paired" : "code";
+
   root.replaceChildren(
     el(`
     <main class="wrap">
+      <header class="app-header">
+        <div class="brand-block">
+          <h1>${escapeAttr(m.title)}</h1>
+          <p>${escapeAttr(m.subtitle)}</p>
+          ${version ? `<span class="version-tag">v${escapeAttr(version)}</span>` : ""}
+        </div>
+        <span class="status-pill ${statusClass}">${escapeAttr(statusLabel)}</span>
+      </header>
+
       <div class="toolbar">
         <button id="btn-check-updates" class="btn-secondary" type="button">${escapeAttr(m.btnCheckUpdates)}</button>
         <div class="toolbar-right">
-          <label class="lang-label" for="lang-select">${escapeAttr(m.languageLabel)}</label>
           <select id="lang-select" class="lang-select" aria-label="${escapeAttr(m.languageLabel)}">
             ${SUPPORTED_LOCALES.map(
               (loc) =>
-                `<option value="${loc}"${loc === activeLocale ? " selected" : ""}>${escapeAttr(
-                  localeOptionLabel(m, loc),
-                )}</option>`,
+                `<option value="${loc}"${loc === activeLocale ? " selected" : ""}>${escapeAttr(localeOptionLabel(m, loc))}</option>`,
             ).join("")}
           </select>
         </div>
       </div>
+
       <div class="update-feedback-block">
         <p id="update-check-feedback" class="feedback update-check-feedback" aria-live="polite"></p>
         <progress id="update-progress" class="update-progress-bar" max="100" value="0" hidden></progress>
       </div>
       <p id="invoke-err" class="feedback err invoke-err" role="alert"></p>
-      <h1>${escapeAttr(m.title)}</h1>
-      <section class="card">
-        <h2>${escapeAttr(m.sectionConnection)}</h2>
-        <p class="muted">${escapeAttr(s.connected ? m.statusConnected : m.statusWaiting)}</p>
-        <p class="hint">${m.hintPairingStuckHtml}</p>
+
+      <section class="card pairing-panel">
+        <h2 class="card-title">${escapeAttr(m.sectionConnection)}</h2>
         <p class="pairing-lead">${m.pairingCodeLabelHtml}</p>
-        <p class="code">${escapeAttr(s.pairing_code)}</p>
+        <div class="code-box">
+          <p class="${codeClass}">${escapeAttr(s.pairing_code)}</p>
+        </div>
         <div class="row">
-          <button id="btn-refresh-code" type="button">${escapeAttr(m.btnRegenerateCode)}</button>
-          <button id="btn-copy" type="button">${escapeAttr(m.btnCopyCode)}</button>
+          <button id="btn-copy" class="btn-copy-primary" type="button">${escapeAttr(m.btnCopyCode)}</button>
+          <button id="btn-refresh-code" class="btn-secondary" type="button">${escapeAttr(m.btnRegenerateCode)}</button>
         </div>
       </section>
+
       <section class="card">
-        <h2>${escapeAttr(m.sectionMainline)}</h2>
-        <p class="hint">${escapeAttr(m.hintMainline)}</p>
-        <input id="mainline" type="text" value="${escapeAttr(s.mainline_base_url)}" />
-        <div class="row">
-          <button id="btn-save-url" type="button">${escapeAttr(m.btnSave)}</button>
-        </div>
-        <p id="url-save-feedback" class="feedback" aria-live="polite"></p>
-      </section>
-      <section class="card">
-        <h2>${escapeAttr(m.sectionLocalApi)}</h2>
-        <p class="muted">${m.localApiMutedHtml}</p>
-        <p><code>${escapeAttr(s.local_api_base ?? m.localApiStarting)}</code></p>
-      </section>
-      <section class="card">
-        <h2>${escapeAttr(m.sectionMounts)}</h2>
-        <ul id="roots" class="roots-list">${s.mounted_roots
-          .map(
-            (r, idx) =>
-              `<li class="mount-row"><span class="mount-path" title="${escapeAttr(r)}">${escapeAttr(r)}</span><button type="button" class="btn-remove-mount btn-secondary" data-mount-index="${idx}" aria-label="${escapeAttr(m.btnRemoveMount)}">${escapeAttr(m.btnRemoveMount)}</button></li>`,
-          )
-          .join("")}</ul>
+        <h2 class="card-title">${escapeAttr(m.sectionMounts)}</h2>
+        ${renderMountsList(s.mounted_roots, m)}
         <button id="btn-add-root" type="button">${escapeAttr(m.btnPickDirectory)}</button>
       </section>
+
+      <details id="advanced-details" class="card card-advanced"${advancedOpen ? " open" : ""}>
+        <summary>${escapeAttr(m.sectionAdvanced)}</summary>
+        <div class="advanced-body">
+          <label class="field-label" for="mainline">${escapeAttr(m.sectionMainline)}</label>
+          <p class="field-hint">${escapeAttr(m.hintMainline)}</p>
+          <input id="mainline" type="text" value="${escapeAttr(s.mainline_base_url)}" autocomplete="off" spellcheck="false" />
+          <div class="row row-left">
+            <button id="btn-save-url" type="button">${escapeAttr(m.btnSave)}</button>
+          </div>
+          <p id="url-save-feedback" class="feedback" aria-live="polite"></p>
+
+          <label class="field-label">${escapeAttr(m.sectionLocalApi)}</label>
+          <p class="field-hint">${m.localApiMutedHtml}</p>
+          <p class="readonly-value">${escapeAttr(s.local_api_base ?? m.localApiStarting)}</p>
+        </div>
+      </details>
     </main>
   `),
   );
+
+  document.getElementById("advanced-details")?.addEventListener("toggle", (ev) => {
+    advancedOpen = (ev.target as HTMLDetailsElement).open;
+  });
 
   document.getElementById("btn-check-updates")?.addEventListener("click", () => {
     void runUpdateCheck(true);
@@ -301,12 +365,11 @@ async function render() {
 
   document.getElementById("lang-select")?.addEventListener("change", (ev) => {
     const sel = ev.target as HTMLSelectElement;
-    const v = sel.value;
-    if (isSupportedLocale(v)) {
-      activeLocale = v;
-      setStoredLocale(v);
-      applyChromeLocale(v);
-      void syncTrayLocale(v);
+    if (isSupportedLocale(sel.value)) {
+      activeLocale = sel.value;
+      setStoredLocale(activeLocale);
+      applyChromeLocale(activeLocale);
+      void syncTrayLocale(activeLocale);
       void render();
     }
   });
@@ -321,9 +384,27 @@ async function render() {
       if (errEl) errEl.textContent = formatInvokeErrorForDisplay(e, getMessages(activeLocale));
     }
   });
+
   document.getElementById("btn-copy")?.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(s.pairing_code);
+    const mm = getMessages(activeLocale);
+    const btn = document.getElementById("btn-copy") as HTMLButtonElement | null;
+    try {
+      await navigator.clipboard.writeText(s.pairing_code);
+      showToast(mm.copyCodeSuccess, "ok");
+      if (btn) {
+        const orig = mm.btnCopyCode;
+        btn.textContent = mm.btnCopyCodeCopied;
+        btn.classList.add("btn-copy-flash");
+        window.setTimeout(() => {
+          btn.textContent = orig;
+          btn.classList.remove("btn-copy-flash");
+        }, 1800);
+      }
+    } catch {
+      showToast(mm.copyCodeFailed, "err");
+    }
   });
+
   document.getElementById("btn-save-url")?.addEventListener("click", async () => {
     const mm = getMessages(activeLocale);
     const v = (document.getElementById("mainline") as HTMLInputElement).value.trim();
@@ -331,23 +412,22 @@ async function render() {
       document.getElementById("btn-save-url")?.toggleAttribute("disabled", busy);
     };
     const setFb = (text: string, cls: string) => {
-      const el = document.getElementById("url-save-feedback");
-      if (!el) return;
-      el.textContent = text;
-      el.className = `feedback ${cls}`.trim();
+      const elFb = document.getElementById("url-save-feedback");
+      if (!elFb) return;
+      elFb.textContent = text;
+      elFb.className = `feedback ${cls}`.trim();
     };
     setBusy(true);
     setFb(mm.saving, "pending");
     try {
       const saved = await invoke<string>("set_mainline_base_url", { url: v });
       await render();
-      const mm2 = getMessages(activeLocale);
-      setFb(mm2.savedWithUrl(saved), "ok");
+      setFb(getMessages(activeLocale).savedWithUrl(saved), "ok");
       window.setTimeout(() => {
-        const el = document.getElementById("url-save-feedback");
-        if (el?.classList.contains("ok")) {
-          el.textContent = "";
-          el.className = "feedback";
+        const elFb = document.getElementById("url-save-feedback");
+        if (elFb?.classList.contains("ok")) {
+          elFb.textContent = "";
+          elFb.className = "feedback";
         }
       }, 5000);
     } catch (e) {
@@ -357,6 +437,7 @@ async function render() {
       document.getElementById("btn-save-url")?.toggleAttribute("disabled", false);
     }
   });
+
   document.getElementById("btn-add-root")?.addEventListener("click", async () => {
     try {
       await invoke("add_mount_directory");
@@ -367,12 +448,12 @@ async function render() {
       if (errEl) errEl.textContent = formatInvokeErrorForDisplay(e, getMessages(activeLocale));
     }
   });
+
   document.getElementById("roots")?.addEventListener("click", async (ev) => {
     const t = ev.target as HTMLElement | null;
-    const btn = t?.closest?.("button[data-mount-index]") as HTMLButtonElement | null;
-    if (!btn) return;
-    const raw = btn.dataset.mountIndex;
-    const index = raw === undefined ? NaN : Number.parseInt(raw, 10);
+    const btnEl = t?.closest?.("button[data-mount-index]") as HTMLButtonElement | null;
+    if (!btnEl) return;
+    const index = Number.parseInt(btnEl.dataset.mountIndex ?? "", 10);
     if (!Number.isFinite(index) || index < 0) return;
     try {
       await invoke("remove_mount_at_index", { index });
@@ -384,58 +465,6 @@ async function render() {
     }
   });
 }
-
-function localeOptionLabel(m: ReturnType<typeof getMessages>, loc: Locale): string {
-  if (loc === "en") return m.langOptionEn;
-  if (loc === "zh-Hans") return m.langOptionZhHans;
-  return m.langOptionZhHant;
-}
-
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-}
-
-const style = document.createElement("style");
-style.textContent = `
-  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1419; color: #e6edf3; }
-  .wrap { max-width: 440px; margin: 0 auto; padding: 1.25rem; }
-  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem; flex-wrap: wrap; }
-  .toolbar-right { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
-  .update-feedback-block { margin: 0 0 0.35rem; }
-  .update-check-feedback { margin: 0; min-height: 0; }
-  .update-check-feedback:empty + .update-progress-bar[hidden] { display: none; }
-  .update-progress-bar { width: 100%; height: 10px; margin: 0.35rem 0 0; border-radius: 4px; overflow: hidden; accent-color: #238636; }
-  .update-progress-bar[hidden] { display: none; }
-  .invoke-err { margin: 0 0 0.75rem; min-height: 0; }
-  .invoke-err:empty { display: none; }
-  .lang-label { font-size: 0.8rem; color: #8b949e; }
-  .lang-select { font-size: 0.8rem; padding: 0.35rem 0.5rem; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: inherit; }
-  h1 { font-size: 1.15rem; font-weight: 600; margin: 0 0 1rem; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-  h2 { font-size: 0.95rem; margin: 0 0 0.5rem; }
-  .muted { color: #8b949e; font-size: 0.85rem; }
-  .hint { color: #8b949e; font-size: 0.78rem; line-height: 1.35; margin: 0 0 0.5rem; }
-  .pairing-lead { margin: 0.5rem 0 0.25rem; font-size: 0.9rem; }
-  .feedback { min-height: 1.25em; font-size: 0.8rem; margin: 0.5rem 0 0; }
-  .feedback.ok { color: #3fb950; }
-  .feedback.err { color: #f85149; }
-  .feedback.pending { color: #d29922; }
-  .code { font-size: 1.75rem; letter-spacing: 0.2em; font-weight: 700; font-family: ui-monospace, monospace; }
-  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
-  button { background: #238636; color: #fff; border: none; padding: 0.45rem 0.75rem; border-radius: 6px; cursor: pointer; }
-  button.btn-secondary { background: transparent; color: #58a6ff; border: 1px solid #30363d; }
-  button.btn-secondary:hover { filter: none; background: #21262d; }
-  button:hover { filter: brightness(1.08); }
-  button:disabled { opacity: 0.55; cursor: not-allowed; filter: none; }
-  input[type=text] { width: 100%; box-sizing: border-box; padding: 0.45rem; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: inherit; margin-bottom: 0.5rem; }
-  ul.roots-list { list-style: none; padding: 0; margin: 0.5rem 0; }
-  li.mount-row { display: flex; align-items: flex-start; gap: 0.5rem; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #30363d; }
-  li.mount-row:last-child { border-bottom: none; }
-  .mount-path { flex: 1; min-width: 0; font-size: 0.78rem; word-break: break-all; }
-  button.btn-remove-mount { flex-shrink: 0; padding: 0.25rem 0.5rem; font-size: 0.75rem; }
-  code { font-size: 0.85rem; }
-`;
-document.head.appendChild(style);
 
 async function bootstrap(): Promise<void> {
   applyChromeLocale(activeLocale);

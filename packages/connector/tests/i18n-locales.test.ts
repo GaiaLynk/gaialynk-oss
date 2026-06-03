@@ -14,6 +14,9 @@ describe("connector i18n locales", () => {
       const m = getMessages(loc);
       expect(m.title.length).toBeGreaterThan(0);
       expect(m.documentTitle.length).toBeGreaterThan(0);
+      expect(m.subtitle.length).toBeGreaterThan(0);
+      expect(m.copyCodeSuccess.length).toBeGreaterThan(0);
+      expect(m.sectionAdvanced.length).toBeGreaterThan(0);
       expect(m.savedWithUrl("https://example.com")).toContain("example.com");
       expect(m.errMountLimit.length).toBeGreaterThan(0);
       expect(m.btnCheckUpdates.length).toBeGreaterThan(0);
