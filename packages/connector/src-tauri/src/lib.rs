@@ -362,8 +362,12 @@ pub fn run() {
         .expect("error while running tauri application")
         .run(|app_handle, event| {
             match event {
-                RunEvent::ExitRequested { api, .. } => {
-                    // Cmd+Q / 任务栏退出等系统退出入口：与窗口关闭一致，收起到托盘而非退出。
+                RunEvent::ExitRequested { api, code, .. } => {
+                    // 托盘菜单「退出」调用 app.exit(0) → code = Some(0)，应真正退出。
+                    // Cmd+Q 等用户交互退出 → code = None，收起到托盘而非退出。
+                    if code.is_some() {
+                        return;
+                    }
                     api.prevent_exit();
                     hide_main_window(app_handle);
                 }
